@@ -25,6 +25,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include <cmath>
 
 typedef unsigned int uint;
 typedef unsigned short ushort;
@@ -88,30 +89,30 @@ typedef glm::quat Quat;
 #define FRUSTUM(LEFT, RIGHT, BOTTOM, TOP, NEARPLANE, FARPLANE) (gml::frustm((LEFT), (RIGHT), (BOTTOM), (TOP), (NEARPLANE), (FARPLANE)))
 
 /*Creates a matrix for a symmetric perspective-view frustum with far plane at infinite.
-	FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
+FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
 #define INFINITEPERSPECTIVE(FOVY, ASPECT, NEARPLANE) (gml::infinitePerspective((FOVY), (ASPECT), (NEARPLANE)))
 
-	/*Build a look at view matrix.
-		EYE: Position of the camera
-		CENTER: Position where the camera is looking at
-		UP: Normalized up vector, how the camera is oriented. Typically (0, 0, 1)*/
+/*Build a look at view matrix.
+EYE: Position of the camera
+CENTER: Position where the camera is looking at
+UP: Normalized up vector, how the camera is oriented. Typically (0, 0, 1)*/
 #define LOOKAT(EYE, CENTER, UP) (glm::lookAt((EYE), (CENTER), (UP)))
 
-		/*Creates a matrix for an orthographic parallel viewing volume.*/
+/*Creates a matrix for an orthographic parallel viewing volume.*/
 #define ORTHO(LEFT, RIGHT, BOTTOM, TOP, ZNEAR, ZFAR) (glm::ortho((LEFT), (RIGHT), (BOTTOM), (TOP), (ZNEAR), (ZFAR)))
 
 /*Creates a matrix for projecting two-dimensional coordinates onto the screen.*/
 #define ORTHO2D(LEFT, RIGHT, BOTTOM, TOP) (glm::ortho((LEFT), (RIGHT), (BOTTOM), (TOP)))
 
 /*Creates a matrix for a symetric perspective-view frustum.
-	FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
+FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
 #define PERSPECTIVE(FOVY, ASPECT, NEARPLANE, FARPLANE) (glm::perspective((FOVY), (ASPECT), (NEARPLANE), (FARPLANE)))
 
-	/*Builds a perspective projection matrix based on a field of view.
-		FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
+/*Builds a perspective projection matrix based on a field of view.
+FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
 #define PERSPECTIVEFOV(FOV, WIDTH, HEIGHT, NEARPLANE, FARPLANE) glm::perspectiveFov((FOV), (WIDTH), (HEIGHT), (NEARPLANE), (FARPLANE))
 
-		/*Define a picking region.*/
+/*Define a picking region.*/
 #define PICKMATRIX(CENTER, DELTA, VIEWPORT) (glm::pickMatrix((CENTER), (DELTA), (VIEWPORT))
 
 /*Map the specified object coordinates (OBJECT.x, OBJECT.y, OBJECT.z) into window coordinates.*/
@@ -148,19 +149,17 @@ typedef glm::quat Quat;
 #define TORAD(X) ((X) * DEGTORAD)
 #define RADTODEG static_cast<float>(180.0 / PI)
 #define TODEG(X) ((X) * RADTODEG)
-#define EQUAL(X, Y) (Heerbann::App::Util::almost_equal((X), (Y)))
-#define ISNULL(X) (Heerbann::App::Util::almost_equal((X), (0.f)))
-#define ABS(X) (std::fabsf(X))
+#define ABS(X) (std::fabs(X))
 #define CLAMP(X, MIN, MAX) (std::clamp((X), (MIN), (MAX)))
-#define SIN(X) (std::sinf(X))
-#define ASIN(X) (std::asinf(X))
-#define COS(X) (std::cosf(X))
+#define SIN(X) (std::sin(X))
+#define ASIN(X) (std::asin(X))
+#define COS(X) (std::cos(X))
 #define ACOS(X) (std::acos(X))
-#define TAN(X) (std::tanf(X))
+#define TAN(X) (std::tan(X))
 #define ATAN(X) (std::atan(X))
 #define INF (std::numeric_limits<float>::infinity())
-#define SQRT(X) (std::sqrtf((X)))
-#define POW(X, Y) (std::powf((X), (Y)))
+#define SQRT(X) (std::sqrt((X)))
+#define POW(X, Y) (std::pow((X), (Y)))
 
 #define colF(X) ((X)/255.f)
 
