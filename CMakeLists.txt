@@ -10,6 +10,8 @@ project(MdVis)
 add_executable(mdvis src/Defines.h src/Gl.h src/Gl.cpp src/main.cpp)
 #set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin" PROPERTY VS_STARTUP_PROJECT mdvis)
 
+include_directories("${CMAKE_SOURCE_DIR}/libs/filesystem/filesystem")
+
 add_subdirectory("${CMAKE_SOURCE_DIR}/libs/glm-0.9.9.8")
 include_directories("${CMAKE_SOURCE_DIR}/libs/glm-0.9.9.8/include")
 target_link_libraries(mdvis glm)

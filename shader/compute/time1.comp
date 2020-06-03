@@ -3,6 +3,8 @@
 #define M_PI 3.141592653589
 #define M_PI_2 6.2831853071
 
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
 layout(location = 1) uniform unsigned int atomCount; //#atoms
 layout(location = 2) uniform unsigned int maxSteps;
 layout(location = 3) uniform float t; //current t

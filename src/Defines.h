@@ -163,6 +163,8 @@ FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
 
 #define colF(X) ((X)/255.f)
 
+/*
+ ++ DEPRECATED ++
 inline void GLError(std::string _id) {
 	bool hasError = false;
 	GLenum err;
@@ -237,6 +239,8 @@ inline void printFrameBufferErrors(std::string _id) {
 	}
 	std::cout << "---- Finished ----" << std::endl;
 };
+
+*/
 
 inline void LOG(const std::string _in) {
 	std::cout << _in << std::endl;
