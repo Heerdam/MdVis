@@ -230,7 +230,7 @@ void Camera::update() {
 
 	float aspect = viewportWidth / viewportHeight;
 	if(isOrtho)
-		projection = ORTHO(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, aspect, ABS(nearPlane), ABS(farPlane));
+		projection = ORTHO(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, ABS(nearPlane), ABS(farPlane));
 	else
 		projection = PERSPECTIVE(TORAD(fieldOfView), aspect, ABS(nearPlane), ABS(farPlane));
 	view = LOOKAT(position, position + direction, up);

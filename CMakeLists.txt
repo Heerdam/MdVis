@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.17.2)
+cmake_minimum_required(VERSION 3.16)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -7,8 +7,8 @@ project(MdVis)
 
 add_executable(mdvis 
 	src/Defines.h 
-	src/Gl.h 
-	src/Gl.cpp 
+	src/GL.h 
+	src/GL.cpp 
 	src/main.cpp 
 	src/Spline.hpp
 

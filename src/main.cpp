@@ -5,8 +5,7 @@
 
 #include "Spline.hpp"
 
-#include <path.h>
-#include <resolver.h>
+#include <filesystem>
 
 #include <sstream>
 #include <map>
@@ -128,15 +127,15 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 			//COMPILE SHADERS
-			_proxy->compShader.compileFromFile(filesystem::path("../shader/c_shader").make_absolute().str());
-			_proxy->geomShader.compileFromFile(filesystem::path("../shader/g_shader").make_absolute().str());
-			_proxy->lightShader.compileFromFile(filesystem::path("../shader/l_shader").make_absolute().str());
-			_proxy->widgetShader.compileFromFile(filesystem::path("../shader/widget_shader").make_absolute().str());
+			_proxy->compShader.compileFromFile(  std::filesystem::absolute(std::filesystem::path("../shader/c_shader")).c_str());
+			_proxy->geomShader.compileFromFile(  std::filesystem::absolute(std::filesystem::path("../shader/g_shader")).c_str());
+			_proxy->lightShader.compileFromFile( std::filesystem::absolute(std::filesystem::path("../shader/l_shader")).c_str());
+			_proxy->widgetShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/widget_shader")).c_str());
 		});
 	}
 
 	//PARSE FILE
-	FileParser::parse(filesystem::path("../out1.traj").make_absolute().str(), _proxy.coords, _proxy.ATOMCOUNT);
+	FileParser::parse(std::filesystem::absolute(std::filesystem::path("../out1.traj")).c_str(), _proxy.coords, _proxy.ATOMCOUNT);
 	//FileParser::parse(filesystem::path(_proxy.pathToFile).make_absolute().str(), _proxy.coords, _proxy.ATOMCOUNT);
 	if (_proxy.ATOMCOUNT > 1024) {
 		LOG("Cant use more than 1024 atoms", _proxy.logMutex);
@@ -449,7 +448,7 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 		
-			//TODO: luege öb das öppis macht
+			//TODO: luege ï¿½b das ï¿½ppis macht
 			_proxy->coords.clear();
 			_proxy->coords.shrink_to_fit();
 
