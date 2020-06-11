@@ -213,173 +213,232 @@ ShaderProgram::~ShaderProgram() {
 
 void ShaderProgram::bind() {
 	glUseProgram(getHandle());
-	//GLError("ShaderProgram::bind");
 }
 
 void ShaderProgram::unbind() {
 	glUseProgram(0);
-	//GLError("ShaderProgram::unbind");
 }
 
-SSBO::SSBO(std::string _id, uint _size, void* _data, GLbitfield _flags) : id(_id), flags(_flags) {
-	glGenBuffers(1, &handle);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
-	glBufferStorage(GL_SHADER_STORAGE_BUFFER, _size, _data, flags);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	//GLError("SSBO::SSBO" + id);
-}
-
-SSBO::~SSBO() {
-	unmap();
-	glDeleteBuffers(1, &handle);
-	//GLError("SSBO::~SSBO" + id);
-}
-
-void SSBO::bind(uint _binding) {
-	bindAs(GL_SHADER_STORAGE_BUFFER, _binding);
-}
-
-void SSBO::bindAs(uint _target, uint _binding) {
-	glBindBufferBase(lastBindTarget = _target, _binding, handle);
-	//GLError("SSBO::bindAs::" + id);
-}
-
-void SSBO::unbind() {
-	glBindBuffer(lastBindTarget, 0);
-	//GLError("SSBO::unbind::" + id);
-}
-
-void* SSBO::map(uint _offset, uint _length, GLbitfield _flags) {
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
-	pntr = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, _offset, _length, _flags);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	//GLError("SSBO::map::" + id);
-	return pntr;
-}
-
-void SSBO::unmap() {
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
-	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	//GLError("SSBO::unmap::" + id);
-}
-
-VBO::VBO(std::string _id, GLsizeiptr _size, const GLvoid* _data, GLenum _usage, uint _vertexCount) : id(_id), size(_vertexCount) {
-	glGenBuffers(1, &handle);
-	bind();
-	glBufferData(GL_ARRAY_BUFFER, _size, _data, _usage);
-	unbind();
-	//GLError("VBO::VBO::" + id);
-}
-
-VBO::~VBO() {
-	glDeleteBuffers(1, &handle);
-	//GLError("VBO::~VBO::" + id);
-}
-
-void VBO::bind() {
-	glBindBuffer(GL_ARRAY_BUFFER, handle);
-	//GLError("VBO::bind::" + id);
-}
-
-void VBO::unbind() {
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	//GLError("VBO::unbind::" + id);
-}
-
-void VBO::bindAs(uint _target, uint _binding) {
-	glBindBufferBase(_target, _binding, handle);
-	//GLError("VBO::bindAs::" + id);
-}
-
-void VBO::enableVertexAttribute(GLuint _index, GLint _size, GLenum _type, GLboolean _normalized, GLsizei _stride, const GLvoid* _pointer) {
-	glVertexAttribPointer(_index, _size, _type, _normalized, _stride, _pointer);
-	glEnableVertexAttribArray(_index);
-	//GLError("VBO::enableVertexAttribute::" + id);
-}
-
-void VBO::drawAll(GLenum _mode) {
-	draw(_mode, 0, size);
-}
-
-void VBO::draw(GLenum _mode, GLint _first, GLsizei _count) {
-	glDrawArrays(_mode, _first, _count);
-	//GLError("VBO::draw::" + id);
-}
-
-EBO::EBO(std::string _id, GLsizeiptr _size, const GLvoid* _data, GLenum _usage, uint _indexCount) : id(_id), size(_indexCount) {
-	glGenBuffers(1, &handle);
-	bind();
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, _size, _data, _usage);
-	unbind();
-	//GLError("EBO::EBO::" + id);
-}
-
-EBO::~EBO() {
-	glDeleteBuffers(1, &handle);
-	//GLError("EBO::~EBO::" + id);
-}
-
-void EBO::bind() {
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, handle);
-	//GLError("EBO::bind::" + id);
-}
-
-void EBO::unbind() {
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, handle);
-	//GLError("EBO::unbind::" + id);
-}
-
-void EBO::drawAll(GLenum _mode) {
-	draw(_mode, 0, size, (void*)0x0);
-}
-
-void EBO::draw(GLenum _mode, GLint _count, GLenum _type, const GLvoid* _offset) {
-	glDrawElements(_mode, _count, _type, _offset);
-	//GLError("EBO::draw::" + id);
-}
-
-Camera::Camera(const float _viewportWidth, const float _viewportHeight) :viewportWidth(_viewportWidth), viewportHeight(_viewportHeight) {
-	direction = Vec4(0.f, 0.f, -1.f, 1.f);
+Camera::Camera(bool _isOrtho, const float _viewportWidth, const float _viewportHeight) :viewportWidth(_viewportWidth), viewportHeight(_viewportHeight) {
+	direction = UVZ;
 	up = UVY;
+	normalizeUp();
 }
 
 void Camera::update() {
-	direction = NOR(Vec4(target[0], target[1], target[2], 1.f) - position);
-	normalizeUpAxisLocked(UVY);
+	normalizeUp();
 
 	float aspect = viewportWidth / viewportHeight;
-	projection = PERSPECTIVE(TORAD(fieldOfView), aspect, ABS(nearPlane), ABS(farPlane));
-	view = LOOKAT(Vec3(position), Vec3(position + direction), Vec3(up));
+	if(isOrtho)
+		projection = ORTHO(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, aspect, ABS(nearPlane), ABS(farPlane));
+	else
+		projection = PERSPECTIVE(TORAD(fieldOfView), aspect, ABS(nearPlane), ABS(farPlane));
+	view = LOOKAT(position, position + direction, up);
 	combined = projection * view;
 }
 
 void Camera::lookAt(const Vec3& _pos) {
-	direction = NOR(Vec4(_pos[0], _pos[1], _pos[2], 1.f) - position);
+	direction = NOR(_pos - position);
 	normalizeUp();
-	view = LOOKAT(Vec3(position), _pos, Vec3(up));
+	view = LOOKAT(position, _pos, up);
 }
 
 void Camera::normalizeUp() {
-	right = Vec4(NOR(CRS(Vec3(direction), Vec3(up))), 1.f);
-	up = Vec4(NOR(CRS(Vec3(right), Vec3(direction))), 1.f);
+	right = NOR(CRS(direction, up));
+	up = NOR(CRS(right, direction));
 }
 
 void Camera::normalizeUpAxisLocked(const Vec3& _up) {
-	right = Vec4(NOR(CRS(_up, Vec3(direction))), 1.f);
-	up = Vec4(NOR(CRS(Vec3(direction), Vec3(right))), 1.f);
+	right = NOR(CRS(_up, direction));
+	up = NOR(CRS(direction, right));
+	if (std::isnan(up[0]) || std::isnan(up[1]) || std::isnan(up[2]))
+		up = _up;
 }
 
-void Camera::arcball(const Vec3& _point, const float _azimuth, const float _altitude, const float _radius) {
-	float x = _radius * SIN(TORAD(_altitude)) * COS(TORAD(_azimuth)) + _point[0];
-	float y = _radius * SIN(TORAD(_altitude)) * SIN(TORAD(_azimuth)) + _point[1];
-	float z = _radius * COS(TORAD(_altitude)) + _point[2];
+void Camera::arcball() {
+	float x = distance * SIN(TORAD(height)) * COS(TORAD(azimuth)) + target[0];
+	float y = distance * SIN(TORAD(height)) * SIN(TORAD(azimuth)) + target[1];
+	float z = distance * COS(TORAD(height)) + target[2];
 
 	position.x = x;
 	position.y = z;
 	position.z = y;
 }
 
-void Camera::translate(const Vec3& _delta) {
-	position += Vec4(_delta[0], _delta[1], _delta[2], 0.f);
+std::pair<std::vector<float>, std::vector<uint>> Icosahedron::create(uint _subdivisions) {
+	
+	using IndexedMesh = std::pair<std::vector<float>, std::vector<uint>>;
+	const float X = .525731112119133606f;
+	const float Z = .850650808352039932f;
+	const float N = 0.f;
+
+	struct Triangle { uint vertex[3]; };
+
+	using TriangleList = std::vector<Triangle>;
+	using VertexList = std::vector<Vec3>;
+
+	const VertexList vertices =
+	{
+	  {-X,N,Z}, {X,N,Z}, {-X,N,-Z}, {X,N,-Z},
+	  {N,Z,X}, {N,Z,-X}, {N,-Z,X}, {N,-Z,-X},
+	  {Z,X,N}, {-Z,X, N}, {Z,-X,N}, {-Z,-X, N}
+	};
+
+	const TriangleList triangles =
+	{
+	  {0,4,1},{0,9,4},{9,5,4},{4,5,8},{4,8,1},
+	  {8,10,1},{8,3,10},{5,3,8},{5,2,3},{2,7,3},
+	  {7,10,3},{7,6,10},{7,11,6},{11,0,6},{0,1,6},
+	  {6,1,10},{9,0,11},{9,11,2},{9,2,5},{7,2,11}
+	};
+
+	using Lookup = std::map<std::pair<uint, uint>, uint>;
+
+	auto vertex_for_edge = [&](Lookup& lookup, VertexList& vertices, uint first, uint second)->uint {
+		Lookup::key_type key(first, second);
+		if (key.first > key.second)
+			std::swap(key.first, key.second);
+
+		auto inserted = lookup.insert({ key, static_cast<uint>(vertices.size()) });
+		if (inserted.second) {
+			auto& edge0 = vertices[first];
+			auto& edge1 = vertices[second];
+			auto point = normalize(edge0 + edge1);
+			vertices.push_back(point);
+		}
+
+		return inserted.first->second;
+	};
+
+	auto subdivide = [&](VertexList& vertices, TriangleList triangles)->TriangleList {
+		Lookup lookup;
+		TriangleList result;
+
+		for (auto&& each : triangles) {
+			std::array<uint, 3> mid;
+			for (int edge = 0; edge < 3; ++edge) {
+				mid[edge] = vertex_for_edge(lookup, vertices,
+					each.vertex[edge], each.vertex[(edge + 1) % 3]);
+			}
+
+			result.push_back({ each.vertex[0], mid[0], mid[2] });
+			result.push_back({ each.vertex[1], mid[1], mid[0] });
+			result.push_back({ each.vertex[2], mid[2], mid[1] });
+			result.push_back({ mid[0], mid[1], mid[2] });
+		}
+
+		return result;
+	};
+
+	VertexList vert = vertices;
+	TriangleList tria = triangles;
+
+	for (unsigned int i = 0; i < _subdivisions; ++i) {
+		tria = subdivide(vert, tria);
+	}
+
+	std::vector<float> v_out(vert.size() * 3);
+	std::vector<uint> i_out(tria.size() * 3);
+
+	for (size_t i = 0, j = 0; i < vert.size(); ++i, j += 3) {
+		auto v = glm::normalize(vert[i]);
+		v_out[j] = v[0];
+		v_out[j + 1] = v[1];
+		v_out[j + 2] = v[2];
+	}
+
+	//for (const auto& t : tria) {
+	for (size_t i = 0, j = 0; i < tria.size(); ++i, j += 3) {
+		auto& t = tria[i];
+		i_out[j] = t.vertex[0];
+		i_out[j + 1] = t.vertex[1];
+		i_out[j + 2] = t.vertex[2];
+	}
+
+	return{ v_out, i_out };
+}
+
+float volatile FileParser::progress = 0.f;
+
+void FileParser::parse(std::string _path, std::vector<float>& _coords, uint& _count) {
+	std::fstream in(_path);
+	char line[256];
+	uint i = 0;
+	while (in.getline(line, 256)) {
+		if (!i) _count = std::atoi(line);
+		else {
+			std::istringstream sstr(line);
+			float x, y, z;
+			sstr >> x >> y >> z;
+			_coords.emplace_back(x * 100.f);
+			_coords.emplace_back(y * 100.f);
+			_coords.emplace_back(z * 100.f);
+		}
+		++i;
+	}
+}
+
+CameraController::CameraController(Camera* _cam) : camera(_cam){}
+
+void CameraController::mbCB(int _button, int _action, int _mods) {
+	mbDown = _button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS;
+}
+
+void CameraController::cursorCB(double _xpos, double _ypos) {
+	if (std::signbit(oldX) || std::signbit(oldY)) {
+		oldX = (float)_xpos;
+		oldY = (float)_ypos;
+		return;
+	}
+
+	if (mbDown) {
+		
+
+		float deltaX = -TORAD(((float)_xpos - oldX) * degreesPerPixel);
+		float deltaY = -TORAD(((float)_ypos - oldY) * degreesPerPixel);
+
+		//std::cout << deltaX << " " << deltaY << std::endl;
+
+		//rotate cam
+		Mat4 rot = glm::rotate(glm::identity<Mat4>(), deltaX, camera->up);;
+
+		Vec4 res = rot * Vec4(camera->direction, 1.f);
+		camera->direction = Vec3(res[0], res[1], res[2]);
+
+		Vec3 tmp = NOR(CRS(camera->direction, camera->up));
+
+		rot = glm::identity<Mat4>();
+
+		rot = glm::rotate(glm::identity<Mat4>(), deltaY, tmp);
+		res = rot * Vec4(camera->direction, 1.f);
+		camera->direction = Vec3(res[0], res[1], res[2]);
+
+		camera->update();
+	}
+
+	oldX = (float)_xpos;
+	oldY = (float)_ypos;
+}
+
+void CameraController::update(GLFWwindow* _window, float _delta) {
+
+	if (glfwGetKey(_window, GLFW_KEY_UP) == GLFW_PRESS) {
+		Vec3 delta = NOR(camera->direction) * (_delta * velocity);
+		camera->position += delta;
+	}
+	if (glfwGetKey(_window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+		Vec3 delta = NOR(camera->direction) * (-_delta * velocity);
+		camera->position += delta;
+	}
+	if (glfwGetKey(_window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+		Vec3 delta = NOR(CRS(camera->direction, camera->up)) * (-_delta * velocity);
+		camera->position += delta;
+	}
+	if (glfwGetKey(_window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+		Vec3 delta = NOR(CRS(camera->direction, camera->up)) * (_delta * velocity);
+		camera->position += delta;
+	}
+
+	camera->update();
+
 }

@@ -5,10 +5,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 project(MdVis)
 
-#include_directories(MdVis PUBLIC "${CMAKE_SOURCE_DIR}/src")
+add_executable(mdvis 
+	src/Defines.h 
+	src/Gl.h 
+	src/Gl.cpp 
+	src/main.cpp 
+	src/Spline.hpp
 
-add_executable(mdvis src/Defines.h src/Gl.h src/Gl.cpp src/main.cpp)
-#set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin" PROPERTY VS_STARTUP_PROJECT mdvis)
+	#gui
+	src/gui/imgui.h
+	src/gui/imconfig.h
+	src/gui/imgui_internal.h
+
+	src/gui/imgui.cpp
+	src/gui/imgui_draw.cpp
+	src/gui/imgui_widgets.cpp
+
+	src/gui/imgui_demo.cpp
+
+)
 
 include_directories("${CMAKE_SOURCE_DIR}/libs/filesystem/filesystem")
 

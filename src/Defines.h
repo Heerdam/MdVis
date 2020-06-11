@@ -1,6 +1,8 @@
 #pragma once
 
-#include "../libs/glew-2.1.0/include/GL/glew.h"
+#include <GL/glew.h>
+
+#include <GLFW/glfw3.h>
 
 #include <glm/ext/vector_float2.hpp>
 #include <glm/ext/vector_float3.hpp>
@@ -26,6 +28,17 @@
 #include <vector>
 #include <fstream>
 #include <cmath>
+#include <sstream>
+#include <map>
+#include <functional>
+#include <array>
+#include <thread>
+#include <atomic>
+#include <queue>
+#include <mutex>
+#include <chrono>
+
+#define GLM_FORCE_RADIANS
 
 typedef unsigned int uint;
 typedef unsigned short ushort;
@@ -42,9 +55,9 @@ typedef glm::vec2 Vec2;
 typedef glm::vec3 Vec3;
 typedef glm::vec4 Vec4;
 
-#define UVX Vec4(1.f, 0.f, 0.f, 1.f)
-#define UVY Vec4(0.f, 1.f, 0.f, 1.f)
-#define UVZ Vec4(0.f, 0.f, 1.f, 1.f)
+#define UVX Vec3(1.f, 0.f, 0.f)
+#define UVY Vec3(0.f, 1.f, 0.f)
+#define UVZ Vec3(0.f, 0.f, 1.f)
 
 typedef glm::mat3 Mat3;
 typedef glm::mat4 Mat4;
@@ -144,7 +157,7 @@ FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
 #define YAW(X) (glm::yaw((X))))
 #define PITCH(X) (glm::pitch((X)))
 
-#define PI 3.14159265358979323846f
+#define PI 3.14159265358979323846
 #define DEGTORAD static_cast<float>(PI / 180.0)
 #define TORAD(X) ((X) * DEGTORAD)
 #define RADTODEG static_cast<float>(180.0 / PI)
@@ -163,85 +176,244 @@ FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
 
 #define colF(X) ((X)/255.f)
 
-/*
- ++ DEPRECATED ++
-inline void GLError(std::string _id) {
-	bool hasError = false;
-	GLenum err;
-	while ((err = glGetError()) != GL_NO_ERROR) {
-		if (!hasError) {
-			hasError = true;
-			std::cout << "---- Print OpenGl Errors: " << _id << " ----" << std::endl;
-		}
-		switch (err) {
-		case GL_INVALID_VALUE:
-			std::cout << "Invalid Value";
-			break;
-		case GL_INVALID_OPERATION:
-			std::cout << "Invalid Operation";
-			break;
-		case GL_OUT_OF_MEMORY:
-			std::cout << "Out of Memory";
-			break;
-		case GL_INVALID_ENUM:
-			std::cout << "Invalid Enum";
-			break;
-		case GL_STACK_OVERFLOW:
-			std::cout << "Stack Overflow";
-			break;
-		case GL_STACK_UNDERFLOW:
-			std::cout << "Stack Underflow";
-			break;
-		case GL_INVALID_FRAMEBUFFER_OPERATION:
-			std::cout << "Invalid Framebuffer Operation";
-			break;
-		//case GL_CONTEXT_LOST:
-		//	std::cout << "Context Lost";
-		//	break;
-		}
-		std::cout << " (" << err << ")" << std::endl;
-	}
-	if (hasError) std::cout << "---- Finished ----" << std::endl;
-};
 
-inline void printFrameBufferErrors(std::string _id) {
-	switch (glCheckFramebufferStatus(GL_FRAMEBUFFER)) {
-	case GL_FRAMEBUFFER_COMPLETE:
-		return;
-	case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
-		std::cout << "---- Print Framebuffer Errors: " << _id << " ----" << std::endl;
-		std::cout << "FRAMEBUFFER INCOMPLETE ATTACHMENT" << std::endl;
-		break;
-	case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
-		std::cout << "---- Print Framebuffer Errors: " << _id << " ----" << std::endl;
-		std::cout << "FRAMEBUFFER INCOMPLETE MISSING ATTACHMENT" << std::endl;
-		break;
-	case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER:
-		std::cout << "---- Print Framebuffer Errors: " << _id << " ----" << std::endl;
-		std::cout << "FRAMEBUFFER INCOMPLETE DRAW BUFFER" << std::endl;
-		break;
-	case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER:
-		std::cout << "---- Print Framebuffer Errors: " << _id << " ----" << std::endl;
-		std::cout << "FRAMEBUFFER INCOMPLETE READ BUFFER" << std::endl;
-		break;
-	case GL_FRAMEBUFFER_UNSUPPORTED:
-		std::cout << "---- Print Framebuffer Errors: " << _id << " ----" << std::endl;
-		std::cout << "FRAMEBUFFER UNSUPPORTED" << std::endl;
-		break;
-	case GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
-		std::cout << "---- Print Framebuffer Errors: " << _id << " ----" << std::endl;
-		std::cout << "FRAMEBUFFER INCOMPLETE MULTISAMPLE" << std::endl;
-		break;
-	case GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS:
-		std::cout << "---- Print Framebuffer Errors: " << _id << " ----" << std::endl;
-		std::cout << "FRAMEBUFFER INCOMPLETE LAYER TARGETS" << std::endl;
-		break;
-	}
-	std::cout << "---- Finished ----" << std::endl;
+inline void LOG(const std::string _in, std::mutex& _mutex) {
+	std::lock_guard<std::mutex> lock(_mutex);
+	std::cout << _in << std::endl;
 };
-
-*/
 
 inline void LOG(const std::string _in) {
 	std::cout << _in << std::endl;
+};
+
+inline void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
+	const GLchar* message, const void* userParam) {
+	if (type != GL_DEBUG_TYPE_ERROR) return;
+	fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+		(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+		type, severity, message);
+}
+
+const inline float axisV[234] = {
+	-11.748000f, -0.360000f, 1.268000f,
+	-11.276000f, -0.360000f, 1.268000f,
+	-10.424000f, -0.360000f, 0.228000f,
+	-9.568000f, -0.360000f, 1.268000f,
+	-9.092000f, -0.360000f, 1.268000f,
+	-10.184000f, -0.360000f, -0.048000f,
+	-9.008000f, -0.360000f, -1.460000f,
+	-9.484000f, -0.360000f, -1.460000f,
+	-10.424000f, -0.360000f, -0.332000f,
+	-11.352000f, -0.360000f, -1.460000f,
+	-11.824000f, -0.360000f, -1.460000f,
+	-10.660000f, -0.360000f, -0.048000f,
+	-9.484000f, 0.373033f, -1.460000f,
+	-10.424000f, 0.373033f, -0.332000f,
+	-11.748000f, 0.373033f, 1.268000f,
+	-10.660000f, 0.373033f, -0.048000f,
+	-9.568000f, 0.373033f, 1.268000f,
+	-10.184000f, 0.373033f, -0.048000f,
+	-11.824000f, 0.373033f, -1.460000f,
+	-9.008000f, 0.373033f, -1.460000f,
+	-10.424000f, 0.373033f, 0.228000f,
+	-11.352000f, 0.373033f, -1.460000f,
+	-9.092000f, 0.373033f, 1.268000f,
+	-11.276000f, 0.373033f, 1.268000f,
+	-0.620000f, -0.380000f, 11.376000f,
+	1.116000f, -0.380000f, 9.000000f,
+	-1.344000f, -0.380000f, 9.000000f,
+	-1.344000f, -0.380000f, 9.352000f,
+	0.392000f, -0.380000f, 9.352000f,
+	-1.344000f, -0.380000f, 11.728000f,
+	1.008000f, -0.380000f, 11.728000f,
+	1.008000f, -0.380000f, 11.376000f,
+	0.392000f, 0.384923f, 9.352000f,
+	-1.344000f, 0.384923f, 11.728000f,
+	-0.620000f, 0.384923f, 11.376000f,
+	-1.344000f, 0.384923f, 9.352000f,
+	1.116000f, 0.384923f, 9.000000f,
+	1.008000f, 0.384923f, 11.728000f,
+	1.008000f, 0.384923f, 11.376000f,
+	-1.344000f, 0.384923f, 9.000000f,
+	-0.250000f, 10.788000f, 0.104000f,
+	-0.250000f, 11.728000f, -0.628000f,
+	-0.250000f, 11.728000f, -1.100000f,
+	-0.250000f, 10.444000f, -0.088000f,
+	-0.250000f, 9.000000f, -0.088000f,
+	-0.250000f, 9.000000f, 0.304000f,
+	-0.250000f, 10.440000f, 0.304000f,
+	-0.250000f, 11.728000f, 1.316000f,
+	-0.250000f, 11.728000f, 0.844000f,
+	0.304321f, 9.000000f, -0.088000f,
+	0.304321f, 9.000000f, 0.304000f,
+	0.304321f, 10.440000f, 0.304000f,
+	0.304321f, 10.444000f, -0.088000f,
+	0.304321f, 11.728000f, 1.316000f,
+	0.304321f, 10.788000f, 0.104000f,
+	0.304321f, 11.728000f, -0.628000f,
+	0.304321f, 11.728000f, -1.100000f,
+	0.304321f, 11.728000f, 0.844000f,
+	0.500000f, -0.500000f, -0.500000f,
+	0.500000f, 0.500000f, -0.500000f,
+	0.500000f, -0.500000f, 0.500000f,
+	0.500000f, 0.500000f, 0.500000f,
+	-0.500000f, -0.500000f, -0.500000f,
+	-0.500000f, 0.500000f, -0.500000f,
+	-0.500000f, -0.500000f, 0.500000f,
+	-0.500000f, 0.500000f, 0.500000f,
+	-8.500000f, 0.500000f, 0.500000f,
+	-8.500000f, -0.500000f, 0.500000f,
+	-8.500000f, -0.500000f, -0.500000f,
+	-8.500000f, 0.500000f, -0.500000f,
+	0.500000f, 8.500000f, -0.500000f,
+	0.500000f, 8.500000f, 0.500000f,
+	-0.500000f, 8.500000f, 0.500000f,
+	-0.500000f, 8.500000f, -0.500000f,
+	0.500000f, 0.500000f, 8.500000f,
+	0.500000f, -0.500000f, 8.500000f,
+	-0.500000f, -0.500000f, 8.500000f,
+	-0.500000f, 0.500000f, 8.500000f
+};
+
+const inline uint axisI[420] = {
+	6, 5, 4,
+	6, 4, 3,
+	3, 2, 1,
+	3, 1, 12,
+	6, 3, 12,
+	7, 6, 12,
+	7, 12, 9,
+	9, 12, 11,
+	7, 9, 8,
+	10, 9, 11,
+	18, 17, 23,
+	18, 21, 17,
+	21, 15, 24,
+	21, 16, 15,
+	18, 16, 21,
+	20, 16, 18,
+	20, 14, 16,
+	14, 19, 16,
+	20, 13, 14,
+	22, 19, 14,
+	6, 23, 5,
+	9, 13, 8,
+	10, 14, 9,
+	7, 18, 6,
+	1, 16, 12,
+	11, 22, 10,
+	2, 15, 1,
+	5, 17, 4,
+	4, 21, 3,
+	3, 24, 2,
+	8, 20, 7,
+	12, 19, 11,
+	32, 31, 30,
+	32, 30, 25,
+	25, 30, 29,
+	26, 25, 29,
+	26, 29, 28,
+	26, 28, 27,
+	39, 34, 38,
+	39, 35, 34,
+	35, 33, 34,
+	37, 33, 35,
+	37, 36, 33,
+	37, 40, 36,
+	28, 40, 27,
+	25, 39, 32,
+	32, 38, 31,
+	26, 35, 25,
+	29, 36, 28,
+	30, 33, 29,
+	27, 37, 26,
+	31, 34, 30,
+	44, 42, 43,
+	44, 41, 42,
+	41, 48, 49,
+	41, 47, 48,
+	44, 47, 41,
+	45, 47, 44,
+	45, 46, 47,
+	53, 57, 56,
+	53, 56, 55,
+	55, 58, 54,
+	55, 54, 52,
+	53, 55, 52,
+	50, 53, 52,
+	50, 52, 51,
+	58, 41, 49,
+	50, 46, 45,
+	55, 42, 41,
+	54, 49, 48,
+	51, 47, 46,
+	52, 48, 47,
+	56, 43, 42,
+	57, 44, 43,
+	53, 45, 44,
+	60, 61, 59,
+	65, 78, 66,
+	66, 68, 65,
+	64, 59, 63,
+	65, 59, 61,
+	60, 72, 62,
+	67, 69, 68,
+	63, 70, 64,
+	65, 69, 63,
+	64, 67, 66,
+	72, 74, 73,
+	64, 71, 60,
+	62, 73, 66,
+	66, 74, 64,
+	75, 77, 76,
+	61, 77, 65,
+	66, 75, 62,
+	62, 76, 61,
+	6, 18, 23,
+	9, 14, 13,
+	10, 22, 14,
+	7, 20, 18,
+	1, 15, 16,
+	11, 19, 22,
+	2, 24, 15,
+	5, 23, 17,
+	4, 17, 21,
+	3, 21, 24,
+	8, 13, 20,
+	12, 16, 19,
+	28, 36, 40,
+	25, 35, 39,
+	32, 39, 38,
+	26, 37, 35,
+	29, 33, 36,
+	30, 34, 33,
+	27, 40, 37,
+	31, 38, 34,
+	58, 55, 41,
+	50, 51, 46,
+	55, 56, 42,
+	54, 58, 49,
+	51, 52, 47,
+	52, 54, 48,
+	56, 57, 43,
+	57, 53, 44,
+	53, 50, 45,
+	60, 62, 61,
+	65, 77, 78,
+	66, 67, 68,
+	64, 60, 59,
+	65, 63, 59,
+	60, 71, 72,
+	67, 70, 69,
+	63, 69, 70,
+	65, 68, 69,
+	64, 70, 67,
+	72, 71, 74,
+	64, 74, 71,
+	62, 72, 73,
+	66, 73, 74,
+	75, 78, 77,
+	61, 76, 77,
+	66, 78, 75,
+	62, 75, 76
 };
