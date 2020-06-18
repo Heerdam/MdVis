@@ -1,0 +1,122 @@
+#version 460 core
+
+#define M_PI 3.141592653589
+#define M_PI_2 6.2831853071
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout (location = 1) uniform unsigned int atomCount;
+layout (location = 2) uniform unsigned int steps; 
+layout (location = 3) uniform vec3 dims;
+
+layout(std430, binding = 1) coherent buffer traj {
+	float traj_data[];
+};
+
+layout(std430, binding = 2) coherent buffer weights {
+	float w_data[]; //12 * steps * atoms
+};
+
+float tmp[1024]; //max size
+float x[1024]; //solution vector
+
+void main() {
+	
+	const uint idx = gl_GlobalInvocationID.x;
+
+	const float hx = dims.x;
+	const float hy = dims.y;
+	const float hz = dims.z;
+
+	const float hx2 = hx/2.f;
+	const float hy2 = hy/2.f;
+	const float hz2 = hz/2.f;
+
+	float osx = 0.f, osy = 0.f, osz = 0.f;
+	
+	//remove cyclic boundary conditions
+	
+	for(uint i = 1; i < steps; ++i) {
+		const uint offsetL = 3*idx + (i-1)*atomCount*3;
+		const uint offsetH = 3*idx + i*atomCount*3;
+
+		const float dx = traj_data[offsetH] - traj_data[offsetL];
+		const float dy = traj_data[offsetH + 1] - traj_data[offsetL + 1];
+		const float dz = traj_data[offsetH + 2] - traj_data[offsetL + 2];
+
+		traj_data[offsetL] += osx * hx;
+		traj_data[offsetL+1] += osy * hy;
+		traj_data[offsetL+2] += osz * hz;
+
+		osx += dx >= hx2 ? -1.f : dx <= -hx2 ? 1.f : 0.f;
+		osy += dy >= hy2 ? -1.f : dy <= -hy2 ? 1.f : 0.f;
+		osz += dz >= hz2 ? -1.f : dz <= -hz2 ? 1.f : 0.f;	
+	}
+	
+	memoryBarrierBuffer();
+
+	//w_data[idx*3] = osx;
+	//w_data[idx*3+1] = osy;
+	//w_data[idx*3+2] = osz;
+
+	//return;
+
+	const float t = 1.f / float(steps);
+	const float m2 = (2.f * t) / 3.;
+	const float m13 = t / 6.f;
+
+	//dims
+	for(uint k = 0; k < 3; ++k){
+
+		//rhs
+		for(uint i = 1; i < steps-1; ++i){
+
+			const uint offsetL = 3*idx + (i-1)*atomCount*3 + k;
+			const uint offsetM = 3*idx + i*atomCount*3 + k;
+			const uint offsetH = 3*idx + (i+1)*atomCount*3 + k;
+
+			x[i] = (traj_data[offsetH] - traj_data[offsetM]) / t - (traj_data[offsetM] - traj_data[offsetL]) / t;
+			tmp[i] = 0.f;
+		}
+
+		//boundary conditions
+		x[0] = 3.f * ((traj_data[3*idx + atomCount*3 + k] - traj_data[3*idx + k]) / t - 0.f);
+		x[steps-1] = 3.0 * (0.f - (traj_data[3*idx + (steps-1)*atomCount*3 + k] - traj_data[3*idx + (steps-2)*atomCount*3 + k]) / t);
+
+		//solve
+		tmp[0] = m13 / m2;
+		x[0] = x[0] / m2;
+
+		for (uint i = 1; i < steps; ++i) {
+			const float m = 1.f / (m2 - m13 * tmp[i-1]);
+			tmp[i] = m13 * m;
+			x[i] = (x[i] - m13 * x[i - 1]) * m;
+		}
+
+		for (uint i = steps - 2; i > 0; --i)
+			x[i] -= tmp[i] * x[i + 1];
+		x[0] -= tmp[0] * x[1];
+
+		if(idx == 0){
+			for(uint i = 0; i < steps; ++i)
+				w_data[i] = x[i];
+		}
+
+		//calc weights
+		for(uint i = 1; i < steps; ++i){
+
+			const uint offsetL = 3*idx + (i-1)*atomCount*3 + k;
+			const uint offsetM = 3*idx + i*atomCount*3 + k;
+
+			const uint offset = 12*idx + (i-1)*atomCount*12 + k;
+
+			w_data[offset] = traj_data[offsetL];
+			w_data[offset + 3] = (traj_data[offsetM] - traj_data[offsetL]) / t - (t*(2*x[i-1] + x[i]))/6.f;
+			w_data[offset + 6] = x[i-1]/2.f;
+			w_data[offset + 9] = (x[i] - x[i-1])/(6*t);
+
+		}
+
+	}
+	memoryBarrierBuffer();
+}

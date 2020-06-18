@@ -15,7 +15,9 @@ layout(location = 5) uniform float radius;
 
 layout(location = 6) uniform vec4 color;
 
-layout(std430, binding = 1) readonly buffer traj {
+layout (location = 8) uniform vec3 dims;
+
+layout(std430, binding = 1) buffer traj {
 	float traj_data[];
 };
 
@@ -40,14 +42,29 @@ void main() {
 	const uint verIndex = index * sphere_vertices * vertexSize;
 
 	float h = t - currentStep*frac;
-	uint idx = 12* index + currentStep * atomCount * 12;
+	const uint idx = 12* index + currentStep * atomCount * 12;
 
-	vec3 traj = vec3(w_data[idx], w_data[idx+1], w_data[idx+2]);
-	vec3 m_a = vec3(w_data[idx+3], w_data[idx+4], w_data[idx+5]);
-	vec3 m_b = vec3(w_data[idx+6], w_data[idx+7], w_data[idx+8]);
-	vec3 m_c = vec3(w_data[idx+9], w_data[idx+10], w_data[idx+11]);
+	const float hx = dims.x;
+	const float hy = dims.y;
+	const float hz = dims.z;
 
-	vec3 pos = ((m_a * h + m_b) * h + m_c) * h + traj;
+	vec3 pos = vec3(0.f);
+
+	if(maxSteps > 1){
+		vec3 m_a = vec3(w_data[idx], w_data[idx+1], w_data[idx+2]);
+		vec3 m_b = vec3(w_data[idx+3], w_data[idx+4], w_data[idx+5]);
+		vec3 m_c = vec3(w_data[idx+6], w_data[idx+7], w_data[idx+8]);
+		vec3 m_d = vec3(w_data[idx+9], w_data[idx+10], w_data[idx+11]);
+
+		pos = ((m_d * h + m_c) * h + m_b) * h + m_a;
+
+		//cyclic boundary conditions
+		//pos.x = pos.x > up.x ? pos.x - hx : pos.x < down.x ? pos.x + hx : pos.x;
+		//pos.y = pos.y > up.y ? pos.y - hy : pos.y < down.y ? pos.y + hy : pos.y;
+		//pos.z = pos.z > up.z ? pos.z - hz : pos.z < down.z ? pos.z + hz : pos.z;
+
+	} else
+		pos = vec3(traj_data[offset + 3*index], traj_data[offset + 3*index + 1], traj_data[offset + 3*index + 2]);
 
 	for(int i = 0; i < sphere_vertices; ++i) {		
 		//pos

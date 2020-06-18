@@ -37,6 +37,7 @@
 #include <queue>
 #include <mutex>
 #include <chrono>
+#include <filesystem>
 
 #define GLM_FORCE_RADIANS
 

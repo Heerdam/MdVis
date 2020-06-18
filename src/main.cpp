@@ -3,10 +3,7 @@
 
 #include <glm/gtx/string_cast.hpp>
 
-#include "Spline.hpp"
-
-#include <path.h>
-#include <resolver.h>
+#include "xoshiro.h"
 
 #include <sstream>
 #include <map>
@@ -21,6 +18,8 @@ struct Proxy {
 	GLFWwindow* window;
 	Camera cam, widgetCam;
 	CameraController controller;
+	Vec3 dims;
+	Vec3 low, up;
 
 	// -------------------- Viewport --------------------
 	int wWidth, wHeight;
@@ -29,21 +28,23 @@ struct Proxy {
 	// -------------------- Inputs --------------------
 	bool rmb_down = false;
 	double oldX = -1.f, oldY = -1.f;
-	float t = 0.f, deltaT = 0.000001f;
+	float t = 0.f, deltaT = 0.00001f;
 
 	// -------------------- Constants --------------------
 	uint ATOMCOUNT, TIMESTEPS, SPHEREVERTICES, INDEXCOUNT;
 	const uint VERTEXSIZE = 3u; //pos
 	const uint SPHEREVERTEXSIZE = 3u; //pos
 	const uint AUXVERTEXSIZE = 3u + 3u + 3u; //nrm + t + bt
+	const uint GUI_MAX_VERTICES = 6000u;
+	const uint GUI_MAX_IDX = 6000u;
 
 	// -------------------- GL --------------------
-	Vec4 clearColor = Vec4(0.f, 0.f, 0.f, 1.f);
-	Vec4 atomColor = Vec4(0.85f, 0.f, 0.f, 1.f);
+	Vec4 clearColor = Vec4(0.03f, 0.09f, 0.22f, 1.f); 
+	Vec4 atomColor = Vec4(0.73f, 0.84f, 0.99f, 1.f);
 	bool isGLloaded = false, shouldTerminate = false;
 
 	//shaders
-	ShaderProgram splineShader, compShader, geomShader, lightShader, widgetShader, guiShader;
+	ShaderProgram splineShader, compShader, geomShader, lightShader, widgetShader/*, guiShader*/;
 
 	//compute pass
 	GLuint c_ssbo_traj, c_ssbo_sphere, cg_vbo, c_ssbo_weights;
@@ -67,91 +68,40 @@ struct Proxy {
 	std::queue<std::function<void(Proxy*)>> asyncQueue;
 };
 
-void createSplines(uint _count, uint _steps, const std::vector<float>& _traj, std::vector<float>& _out){
-
-	const uint sizeTraj = _steps * (4 * 3);
-	_out.resize(_count * sizeTraj);
-
-	std::vector<float> X(_steps);
-	float frac = 1.f / _steps;
-	for (uint i = 0; i < _steps; ++i)
-		X[i] = i * frac;
-
-	for (uint i = 0; i < _count; ++i) {
-
-		std::vector<float> Y_x(_steps);
-		std::vector<float> Y_y(_steps);
-		std::vector<float> Y_z(_steps);
-
-		for (uint j = 0; j < _steps; ++j) {
-			Y_x[j] = _traj[i*3 + j*_count*3];
-			Y_y[j] = _traj[i*3 + j * _count * 3 + 1];
-			Y_z[j] = _traj[i*3 + j * _count * 3 + 2];
-
-		}
-
-		tk::spline x;
-		x.set_points(X, Y_x);
-		tk::spline y;
-		y.set_points(X, Y_y);
-		tk::spline z;
-		z.set_points(X, Y_z);
-
-		
-		for (uint j = 0; j < _steps; ++j) {
-
-			//pos
-			uint offset = i * 12 + j * _count * 12;
-			_out[offset] = Y_x[j];
-			_out[offset + 1] = Y_y[j];
-			_out[offset + 2] = Y_z[j];
-			//m_a
-			_out[offset + 3] = x.m_a[j];
-			_out[offset + 4] = y.m_a[j];
-			_out[offset + 5] = z.m_a[j];
-			//m_B
-			_out[offset + 6] = x.m_b[j];
-			_out[offset + 7] = y.m_b[j];
-			_out[offset + 8] = z.m_b[j];
-			//m_c
-			_out[offset + 9] = x.m_c[j];
-			_out[offset + 10] = y.m_c[j];
-			_out[offset + 11] = z.m_c[j];
-		}
-	}
-
-}
-
 void load(std::atomic<float>& _progress, Proxy& _proxy) {
 
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 			//COMPILE SHADERS
-			_proxy->compShader.compileFromFile(filesystem::path("../shader/c_shader").make_absolute().str());
-			_proxy->geomShader.compileFromFile(filesystem::path("../shader/g_shader").make_absolute().str());
-			_proxy->lightShader.compileFromFile(filesystem::path("../shader/l_shader").make_absolute().str());
-			_proxy->widgetShader.compileFromFile(filesystem::path("../shader/widget_shader").make_absolute().str());
+			//TODO schäider für 2 cases
+			_proxy->compShader.id = "c_shader";
+			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/c_shader")).string());
+			_proxy->geomShader.id = "g_shader";
+			_proxy->geomShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/g_shader")).string());
+			_proxy->lightShader.id = "l_shader";
+			_proxy->lightShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/l_shader")).string());
+			_proxy->widgetShader.id = "widget_shader";
+			_proxy->widgetShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/widget_shader")).string());
 		});
 	}
 
-	//PARSE FILE
-	FileParser::parse(filesystem::path("../out1.traj").make_absolute().str(), _proxy.coords, _proxy.ATOMCOUNT);
-	//FileParser::parse(filesystem::path(_proxy.pathToFile).make_absolute().str(), _proxy.coords, _proxy.ATOMCOUNT);
-	if (_proxy.ATOMCOUNT > 1024) {
-		LOG("Cant use more than 1024 atoms", _proxy.logMutex);
-		_proxy.shouldTerminate = true;
-	}
-	LOG(std::to_string(_proxy.ATOMCOUNT) + " atoms loaded", _proxy.logMutex);
+	LOG("Loading file: " + _proxy.pathToFile + "\n", _proxy.logMutex);
 
+	//PARSE FILE
+	FileParser::parse(std::filesystem::absolute(std::filesystem::path("../out1.traj")).string(), _proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
+	//FileParser::parse(filesystem::path(_proxy.pathToFile).make_absolute().str(), _proxy.coords, _proxy.ATOMCOUNT);
 	_proxy.TIMESTEPS = static_cast<uint>(_proxy.coords.size() / 3) / _proxy.ATOMCOUNT;
+
+	LOG("Atoms: " + std::to_string(_proxy.ATOMCOUNT) + " Steps: " + std::to_string(_proxy.TIMESTEPS) + "\n", _proxy.logMutex);
+	LOG("Bounds: [" + std::to_string(_proxy.up.x) + ", " + std::to_string(_proxy.up.y) + ", " + std::to_string(_proxy.up.z) + "]\n", _proxy.logMutex);
 
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 			glGenBuffers(1, &_proxy->c_ssbo_traj);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_traj);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->coords.size() * sizeof(float), _proxy->coords.data(), GL_STATIC_DRAW);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->coords.size() * sizeof(float), _proxy->coords.data(), GL_DYNAMIC_DRAW);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 			glGenBuffers(1, &_proxy->cg_vbo);
@@ -160,11 +110,41 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		});
 	}
+
+	{
+		Vec3 cntr;
+		for (uint i = 0; i < 3; ++i)
+			cntr[i] = (_proxy.up[i] - _proxy.low[i]) / 2.f + _proxy.low[i];
+
+		//SET UP THE CAMERAS
+		_proxy.cam = Camera(false, _proxy.wWidth, _proxy.wHeight);
+		_proxy.cam.fieldOfView = 50.f;
+		_proxy.cam.nearPlane = 0.001f;
+		_proxy.cam.farPlane = 50000.f;
+		_proxy.cam.position = Vec3(cntr[0] + 1.2f * _proxy.dims[0], cntr[1], cntr[2]);
+		_proxy.cam.direction = NOR(cntr - _proxy.cam.position);
+		_proxy.cam.up = Vec3(0.f, 1.f, 0.f);
+		_proxy.cam.height = 0.1f;
+		_proxy.cam.update();
+
+		_proxy.widgetCam = Camera(false, 400.f, 400.f);
+		_proxy.widgetCam.nearPlane = 1.f;
+		_proxy.widgetCam.farPlane = 10000.f;
+		_proxy.widgetCam.position = Vec3(-50.f, 0.f, 0.f);
+		_proxy.widgetCam.direction = Vec3(1.f, 0.f, 0.f);
+		_proxy.widgetCam.up = Vec3(0.f, 1.f, 0.f);
+		_proxy.widgetCam.update();
+
+		_proxy.controller = CameraController(&_proxy.cam);
+	}
 	
 	//CREATE SPHERE
-	auto sphere = Icosahedron::create(3);
+	const uint subdivisons = 3;
+	auto sphere = Icosahedron::create(subdivisons);
 	_proxy.sphere_vertices = std::get<0>(sphere);
 	auto& sphere_indices = std::get<1>(sphere);
+
+	LOG("Icosahedron loaded with " + std::to_string(subdivisons) + " subdivisons [i: " + std::to_string(sphere_indices.size()) + ", v: " + std::to_string(_proxy.sphere_vertices.size()) + "]", _proxy.logMutex);
 
 	//MERGE INDICES OF SPHERES
 	size_t indexSize = sphere_indices.size();
@@ -178,6 +158,8 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 	//GL CONSTANTS
 	_proxy.SPHEREVERTICES = _proxy.sphere_vertices.size() / _proxy.SPHEREVERTEXSIZE;
 	_proxy.INDEXCOUNT = _proxy.sphere_indices.size();
+
+	LOG("Indices merged for " + std::to_string(_proxy.ATOMCOUNT) + " atoms: " + std::to_string(_proxy.INDEXCOUNT) + "\n", _proxy.logMutex);
 
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
@@ -197,12 +179,11 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 	//CREATE AUX BUFFER
 	_proxy.auxBuffer.resize(_proxy.ATOMCOUNT * _proxy.SPHEREVERTICES * _proxy.AUXVERTEXSIZE);
 	for (uint i = 0; i < _proxy.SPHEREVERTICES; ++i) {
-		//nrm TODO: pack
+		//nrm 
 		Vec3 v = Vec3(_proxy.sphere_vertices[3 * i], _proxy.sphere_vertices[3 * i + 1], _proxy.sphere_vertices[3 * i + 2]);
 		std::memcpy(_proxy.auxBuffer.data() + i * _proxy.AUXVERTEXSIZE, glm::value_ptr(v), 3 * sizeof(float));
 		//t
-		Vec3 t = NOR(CRS(v, Vec3(0.f, 1.f, 0.f)));
-		
+		Vec3 t = NOR(CRS(v, Vec3(0.f, 1.f, 0.f)));		
 		if (std::isnan(t[0]) || std::isnan(t[1]) || std::isnan(t[2]))
 			t = NOR(CRS(v, Vec3(1.f, 0.f, 0.f)));
 		std::memcpy(_proxy.auxBuffer.data() + i * _proxy.AUXVERTEXSIZE + 3, glm::value_ptr(t), 3 * sizeof(float));
@@ -215,6 +196,8 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 		std::memcpy(_proxy.auxBuffer.data() + i * (_proxy.SPHEREVERTICES * _proxy.AUXVERTEXSIZE), _proxy.auxBuffer.data(), _proxy.SPHEREVERTICES * _proxy.AUXVERTEXSIZE * sizeof(float));
 	}
 
+	LOG("Normals, Tangents and Bitangents created.\n", _proxy.logMutex);
+
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
@@ -225,16 +208,61 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 		});
 	}
 
-	createSplines(_proxy.ATOMCOUNT, _proxy.TIMESTEPS, _proxy.coords, _proxy.newTraj);
+	if (_proxy.TIMESTEPS > 1) {
 
-	{
-		std::lock_guard<std::mutex> lock(_proxy.mutex);
-		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
-			glGenBuffers(1, &_proxy->c_ssbo_weights);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_weights);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, static_cast<uint>(_proxy->newTraj.size()) * sizeof(float), _proxy->newTraj.data(), GL_STATIC_DRAW);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-		});
+		{
+			std::lock_guard<std::mutex> lock(_proxy.mutex);
+			_proxy.asyncQueue.push([](Proxy* _proxy)->void {
+				//return;
+				glGenBuffers(1, &_proxy->c_ssbo_weights);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_weights);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->ATOMCOUNT*12*sizeof(float)*_proxy->TIMESTEPS, nullptr, GL_STATIC_DRAW);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+				ShaderProgram shader;
+				shader.id = "t_shader";
+				shader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/t_shader")).string());
+				shader.bind();
+
+				//buffers
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _proxy->c_ssbo_traj);
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _proxy->c_ssbo_weights);
+
+				//uniforms
+				glUniform1ui(1, _proxy->ATOMCOUNT);
+				glUniform1ui(2, _proxy->TIMESTEPS);
+				glUniform3fv(3, 1, glm::value_ptr(_proxy->dims));
+
+				glDispatchCompute(_proxy->ATOMCOUNT, 1, 1);
+
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
+
+				shader.unbind();
+
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
+
+				/*
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_weights);
+				float* data = new float[_proxy->ATOMCOUNT * 4 * sizeof(float) * _proxy->TIMESTEPS];
+				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, _proxy->ATOMCOUNT * 4 * sizeof(float) * _proxy->TIMESTEPS, data);
+
+				for (uint i = 0; i < _proxy->ATOMCOUNT * 4 * sizeof(float) * _proxy->TIMESTEPS; i+=4) {
+					std::cout << i << " " << data[i] << " " << data[i+1] << " " << data[i+2] << " " << data[i+3] << std::endl;
+						
+				}
+				*/
+
+				//for (uint i = 0; i < 20; ++i) {
+				//	for (uint j = 1; j < 3; ++j) {
+				//		for(uint k = 0; k < 3; ++k)
+				//			std::cout << "[" << i << "|" << j << "|" << k << "] " << 12 * i + (j - 1) * _proxy->ATOMCOUNT * 12 + k << std::endl;
+				//	}
+				//}
+
+				
+			});
+		}
 	}
 
 	//Lights
@@ -364,8 +392,9 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			//depth
 			glGenRenderbuffers(1, &_proxy->g_depth);
 			glBindRenderbuffer(GL_RENDERBUFFER, _proxy->g_depth);
-			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, _proxy->wWidth, _proxy->wHeight);
+			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, _proxy->wWidth, _proxy->wHeight);
 			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
 	
 			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 				LOG("Framebuffer not complete! Shutting down...", _proxy->logMutex);
@@ -403,7 +432,6 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_widget);
 			glBindVertexArray(0);
 		});
-
 	}
 
 	{
@@ -449,7 +477,7 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 		
-			//TODO: luege öb das öppis macht
+
 			_proxy->coords.clear();
 			_proxy->coords.shrink_to_fit();
 
@@ -463,6 +491,8 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			_proxy->auxBuffer.shrink_to_fit();
 			
 			_proxy->isGLloaded = true;
+			_proxy->t = 0.f;
+			LOG("Loading finished\n\n", _proxy->logMutex);
 		});
 	}
 	
@@ -479,17 +509,22 @@ int main() {
 		return -1;
 	}
 
+	//tschegg ob comp shader awäsend
+
 	glfwWindowHint(GLFW_REFRESH_RATE, 60);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-	glfwWindowHint(GLFW_SAMPLES, 4);
+	glfwWindowHint(GLFW_SAMPLES, 16);
+	glfwWindowHint(GLFW_DEPTH_BITS, 24);
+	glfwWindowHint(GLFW_STENCIL_BITS, 8);
 
-	proxy.window = glfwCreateWindow(1920, 1080, "MdVis 0.1a", NULL, NULL);
+	proxy.window = glfwCreateWindow(1920, 1080, "MdVis 0.2a", NULL, NULL);
 	if (!proxy.window) {
 		glfwTerminate();
 		return -1;
 	}
 
+	
 	glfwMakeContextCurrent(proxy.window);
 
 	glfwGetFramebufferSize(proxy.window, &proxy.wWidth, &proxy.wHeight);
@@ -502,30 +537,19 @@ int main() {
 		return -1;
 	}
 
+	if (!GL_COMPUTE_SHADER && GL_MAX_COMPUTE_WORK_GROUP_SIZE > 1024) {
+		LOG("Compute Shader not supported!", proxy.logMutex);
+		return -1;
+	}
+
+
+	//TODO 	LOG("Max Dispatch groups: " + std::to_string(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS) + "\n", _proxy.logMutex);
+
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_FRAMEBUFFER_SRGB);
+	glEnable(GL_STENCIL_TEST);
 	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_DEBUG_OUTPUT);
 	glDebugMessageCallback(MessageCallback, 0);
-
-	//SET UP THE CAMERAS
-	proxy.cam = Camera(false, 1920, 1080);
-	proxy.cam.fieldOfView = 50.f;
-	proxy.cam.nearPlane = 1.f;
-	proxy.cam.farPlane = 50000.f;
-	proxy.cam.position = Vec3(300.f, 0., 0.f);
-	proxy.cam.height = 0.1f;
-	proxy.cam.update();
-
-	proxy.widgetCam = Camera(false, 400.f, 400.f);
-	proxy.widgetCam.nearPlane = 1.f;
-	proxy.widgetCam.farPlane = 10000.f;
-	proxy.widgetCam.position = Vec3(-50.f, 0.f, 0.f);
-	proxy.widgetCam.direction = Vec3(1.f, 0.f, 0.f);
-	proxy.widgetCam.up = Vec3(0.f, 1.f, 0.f);
-	proxy.widgetCam.update();
-
-	proxy.controller = CameraController(&proxy.cam);
 
 	// -------------------- SET UP CALLBACKS --------------------
 	
@@ -539,20 +563,22 @@ int main() {
 		proxy->cam->update();
 	});
 	
-
-	glfwSetKeyCallback(window, [](GLFWwindow* _window, int _key, int _scancode, int _action, int _mods)->void {
-	
-		proxy* proxy = reinterpret_cast<proxy*>(glfwGetWindowUserPointer(_window));
-	
+*/	glfwSetKeyCallback(proxy.window, [](GLFWwindow* _window, int _key, int _scancode, int _action, int _mods)->void {	
+		Proxy* proxy = reinterpret_cast<Proxy*>(glfwGetWindowUserPointer(_window));
+		if (!proxy->isGLloaded) return;
+		if (_key == GLFW_KEY_SPACE)
+			proxy->t = 0.f;
 	});
-	*/
+	
 	glfwSetCursorPosCallback(proxy.window, [](GLFWwindow* _window, double _xpos, double _ypos)->void {
 		Proxy* proxy = reinterpret_cast<Proxy*>(glfwGetWindowUserPointer(_window));
+		if (!proxy->isGLloaded) return;
 		proxy->controller.cursorCB(_xpos, _ypos);
 	});
 
 	glfwSetMouseButtonCallback(proxy.window, [](GLFWwindow* _window, int _button, int _action, int _mods)->void {
 		Proxy* proxy = reinterpret_cast<Proxy*>(glfwGetWindowUserPointer(_window));
+		if (!proxy->isGLloaded) return;
 		proxy->controller.mbCB(_button, _action, _mods);
 	});
 
@@ -560,6 +586,11 @@ int main() {
 
 	double time = glfwGetTime();
 	unsigned long long frame = 0;
+
+	GLsync sync[2];
+	uint index = 0;
+	sync[0] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+	sync[1] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 
 	while (!glfwWindowShouldClose(proxy.window)) {
 
@@ -575,37 +606,44 @@ int main() {
 			}
 		}
 
+		glStencilMask(~0);
 		glClearColor(proxy.clearColor[0], proxy.clearColor[1], proxy.clearColor[2], proxy.clearColor[3]);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-		glfwPollEvents();
-
-		proxy.controller.update(proxy.window, 1.f / 60.f);
+		glfwPollEvents();	
 
 		//DRAW STUFF
 		glViewport(0, 0, proxy.wWidth, proxy.wHeight);
 
+		bool show_demo_window = true;
+
 		//create vertexbuffer
 		if (proxy.isGLloaded) {
 
+			proxy.controller.update(proxy.window, 1.f / 60.f);
+			
 			// -------------------- Compute Pass --------------------
 			proxy.compShader.bind();
 
 			//buffers
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, proxy.c_ssbo_traj);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, proxy.c_ssbo_sphere);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, proxy.cg_vbo);
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, proxy.c_ssbo_weights);
+			//if(proxy.TIMESTEPS > 1)
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, proxy.c_ssbo_weights);
+			//else
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, proxy.c_ssbo_traj);
 
 			//uniforms
 			glUniform1ui(1, proxy.ATOMCOUNT);
 			glUniform1i(2, proxy.TIMESTEPS);
 			glUniform1f(3, proxy.t);
 			glUniform1ui(4, proxy.SPHEREVERTICES);
-			glUniform1f(5, 5.f);
+			glUniform1f(5, 0.05f);
 			glUniform4f(6, 0.75f, 0.5f, 0.4f, 1.f);
 			glUniform1f(7, 1.f / proxy.TIMESTEPS);
+			glUniform3fv(8, 1, glm::value_ptr(proxy.dims));
 
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 			glDispatchCompute(proxy.ATOMCOUNT, 1, 1);
 
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
@@ -614,12 +652,14 @@ int main() {
 
 			proxy.compShader.unbind();
 
-			glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
 			// -------------------- Geometry Pass --------------------
 			glBindFramebuffer(GL_FRAMEBUFFER, proxy.g_fb);
 			//glClearColor(0.5f, 0.5f, 0.5f, 1.f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			glStencilMask(~0);
+			glClearColor(proxy.clearColor[0], proxy.clearColor[1], proxy.clearColor[2], proxy.clearColor[3]);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 			proxy.geomShader.bind();
 			glBindVertexArray(proxy.g_vao);
@@ -627,11 +667,20 @@ int main() {
 			glUniform4fv(9, 1, glm::value_ptr(proxy.atomColor));
 			glUniformMatrix4fv(10, 1, false, glm::value_ptr(proxy.cam.combined));
 
+			glStencilMask(0xFF);
+			glStencilFunc(GL_ALWAYS, 1, 0xFF);
+			glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
 			glDrawElements(GL_TRIANGLES, proxy.INDEXCOUNT, GL_UNSIGNED_INT, (void*)0);
 
 			glBindVertexArray(0);
 			proxy.geomShader.unbind();
 
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, proxy.g_fb);
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+			glBlitFramebuffer(0, 0, proxy.wWidth, proxy.wHeight, 0, 0, proxy.wWidth, proxy.wHeight, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 			// -------------------- Lightning Pass --------------------
@@ -660,20 +709,20 @@ int main() {
 
 			//uniforms
 			glUniformMatrix4fv(7, 1, false, glm::value_ptr(proxy.cam.combined));
-			glUniform1fv(9, proxy.lights.size(), proxy.lights.data());
+			glUniform1fv(10, proxy.lights.size(), proxy.lights.data());
 		
+			glStencilMask(0x00);
+			glStencilFunc(GL_EQUAL, 1, 0xFF);
+			glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
 			glDrawElements(GL_TRIANGLES, 6u, GL_UNSIGNED_INT, (void*)0);
+
+			glStencilFunc(GL_ALWAYS, 1, 0xFF);
 
 			glBindVertexArray(0);
 			proxy.lightShader.unbind();
-
-			// -------------------- Copy Framebuffer --------------------
-			//glBindFramebuffer(GL_READ_FRAMEBUFFER, proxy.g_fb);
-			//glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-			//glBlitFramebuffer(0, 0, proxy.wWidth, proxy.wHeight, 0, 0, proxy.wWidth, proxy.wHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 					
-			/*
+			
 			// -------------------- Forward Pass --------------------
 			glViewport(0, 0, proxy.widgetWidth, proxy.widgetHeight);
 
@@ -695,21 +744,31 @@ int main() {
 
 			proxy.widgetShader.unbind();
 			glBindVertexArray(0);
-			*/
 			
+			
+
+			// -------------------- SYNC --------------------
+			glClientWaitSync(sync[index], GL_SYNC_FLUSH_COMMANDS_BIT, 1000);
+			glDeleteSync(sync[index]);
+			sync[index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+			index = (index++) % 2;
+		
+
+		// -------------------- FPS --------------------
+			frame++;
+			if (ctime - time >= 1.0) {
+				//LOG(std::to_string(proxy.t) + " " + std::to_string(frame), proxy.logMutex);
+				std::cout << proxy.t << " " << frame << std::endl;
+				frame = 0;
+				time = ctime;
+			}
 		}
-			
-		glfwSwapBuffers(proxy.window);
+
+		glfwSwapBuffers(proxy.window);	
 		
 		proxy.t += proxy.deltaT;
 		proxy.t -= std::floor(proxy.t);
-		frame++;
-
-		if (ctime - time >= 1.0) {
-			std::cout << frame << std::endl;
-			frame = 0;
-			time = ctime;
-		}
+		
 	}
 	async.join();
 	glfwTerminate();

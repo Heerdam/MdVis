@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.17.2)
+cmake_minimum_required(VERSION 3.16)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -8,24 +8,12 @@ project(MdVis)
 add_executable(mdvis 
 	src/Defines.h 
 	src/Gl.h 
-	src/Gl.cpp 
+	src/GL.cpp 
 	src/main.cpp 
 	src/Spline.hpp
-
-	#gui
-	src/gui/imgui.h
-	src/gui/imconfig.h
-	src/gui/imgui_internal.h
-
-	src/gui/imgui.cpp
-	src/gui/imgui_draw.cpp
-	src/gui/imgui_widgets.cpp
-
-	src/gui/imgui_demo.cpp
+	src/xoshiro.h
 
 )
-
-include_directories("${CMAKE_SOURCE_DIR}/libs/filesystem/filesystem")
 
 add_subdirectory("${CMAKE_SOURCE_DIR}/libs/glm-0.9.9.8")
 include_directories("${CMAKE_SOURCE_DIR}/libs/glm-0.9.9.8/include")

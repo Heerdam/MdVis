@@ -7,8 +7,6 @@ class ShaderProgram {
 		success, failed, missing
 	};
 
-	const std::string id;
-
 	GLint program = -1, compute = -1, vertex = -1, geom = -1, frag = -1;
 	void print(std::string, Status, Status, Status, Status, Status, std::string);
 	
@@ -18,6 +16,7 @@ public:
 	ShaderProgram();
 	~ShaderProgram();
 
+	std::string id;
 	bool printDebug = true;
 
 	/*
@@ -93,6 +92,6 @@ struct Icosahedron {
 
 struct FileParser {
 	static volatile float progress;
-	static void parse(std::string, std::vector<float>&, uint&);
+	static void parse(std::string, std::vector<float>&, uint&, Vec3&, Vec3&, Vec3&);
 };
 

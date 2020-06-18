@@ -10,17 +10,14 @@ void ShaderProgram::print(std::string _id, ShaderProgram::Status _compComp, Shad
 		+ std::string(_compVert == Status::failed ? " X |" : _compVert == Status::success ? " S |" : " - |")
 		+ std::string(_compGeom == Status::failed ? " X |" : _compGeom == Status::success ? " S |" : " - |")
 		+ std::string(_compFrag == Status::failed ? " X |" : _compFrag == Status::success ? " S |" : " - |")
-		+ "\n");
-	LOG("  Linking: " + std::string(_link == Status::failed ? "Failed!" : _link == Status::success ? "Success!" : " - ") + "\n");
+		+ "");
+	LOG("  Linking: " + std::string(_link == Status::failed ? "Failed!" : _link == Status::success ? "Success!" : " - "));
 
-	if (_errorLog.empty()) {
+	if (!_errorLog.empty()) {
+		LOG(std::string(_errorLog) + "\n");
+	} else
 		LOG("\n");
-	} else {
-		LOG("\n" + std::string(_errorLog) + "\n");
-	}
 
-	//GLError(_id);
-	LOG("\n");
 }
 
 bool ShaderProgram::compileFromFile(const std::string& _path) {
@@ -226,11 +223,11 @@ Camera::Camera(bool _isOrtho, const float _viewportWidth, const float _viewportH
 }
 
 void Camera::update() {
-	normalizeUp();
+	//normalizeUp();
 
 	float aspect = viewportWidth / viewportHeight;
 	if(isOrtho)
-		projection = ORTHO(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, aspect, ABS(nearPlane), ABS(farPlane));
+		projection = ORTHO(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, ABS(nearPlane), ABS(farPlane));
 	else
 		projection = PERSPECTIVE(TORAD(fieldOfView), aspect, ABS(nearPlane), ABS(farPlane));
 	view = LOOKAT(position, position + direction, up);
@@ -360,22 +357,38 @@ std::pair<std::vector<float>, std::vector<uint>> Icosahedron::create(uint _subdi
 
 float volatile FileParser::progress = 0.f;
 
-void FileParser::parse(std::string _path, std::vector<float>& _coords, uint& _count) {
+void FileParser::parse(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
 	std::fstream in(_path);
 	char line[256];
 	uint i = 0;
+	_low.x = _low.y = _low.z = std::numeric_limits<float>::infinity();
+	_up.x = _up.y = _up.z = -std::numeric_limits<float>::infinity();
 	while (in.getline(line, 256)) {
 		if (!i) _count = std::atoi(line);
-		else {
+		else if (i == 1) {
 			std::istringstream sstr(line);
 			float x, y, z;
 			sstr >> x >> y >> z;
-			_coords.emplace_back(x * 100.f);
-			_coords.emplace_back(y * 100.f);
-			_coords.emplace_back(z * 100.f);
+			_dims = Vec3(x, y, z);
+		} else {
+			std::istringstream sstr(line);
+			float x, y, z;
+			sstr >> x >> y >> z;
+			_coords.emplace_back(x);
+			_coords.emplace_back(y);
+			_coords.emplace_back(z);
+
+			_low.x = x < _low.x ? x : _low.x;
+			_low.y = y < _low.y ? y : _low.y;
+			_low.z = z < _low.x ? z : _low.z;
+
+			_up.x = x > _up.x ? x : _up.x;
+			_up.y = y > _up.y ? y : _up.y;
+			_up.z = z > _up.x ? z : _up.z;
 		}
 		++i;
 	}
+	//std::cout << i << std::endl;
 }
 
 CameraController::CameraController(Camera* _cam) : camera(_cam){}
@@ -400,8 +413,7 @@ void CameraController::cursorCB(double _xpos, double _ypos) {
 		//std::cout << deltaX << " " << deltaY << std::endl;
 
 		//rotate cam
-		Mat4 rot = glm::rotate(glm::identity<Mat4>(), deltaX, camera->up);;
-
+		Mat4 rot = glm::rotate(glm::identity<Mat4>(), deltaX, camera->up);
 		Vec4 res = rot * Vec4(camera->direction, 1.f);
 		camera->direction = Vec3(res[0], res[1], res[2]);
 

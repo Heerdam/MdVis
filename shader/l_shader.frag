@@ -15,7 +15,9 @@ layout(location = 7) uniform vec3 camPos;
 
 layout (location = 8) uniform float ambiente = 0.1f;
 
-layout(location = 9) uniform float lights[4*6];
+layout (location = 9) uniform float intensity = 0.3f;
+
+layout(location = 10) uniform float lights[4*6];
 
 in vec2 uvs;
 
@@ -34,10 +36,11 @@ void main() {
 
         vec3 L = normalize(lightPos - pos);
 
-        vec3 diffuse =  max(dot(N, L), 0.0) * albedo * lightCol;
+        vec3 diffuse =  max(dot(N, L), 0.0) * albedo * (intensity * lightCol);
         light += diffuse;
     }
 
     fragColor = vec4(light.xyz, 1.0);
+    //fragColor.rgb = pow(fragColor.rgb, vec3(1.f/2.2f));
     
 }
