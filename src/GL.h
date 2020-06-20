@@ -1,6 +1,15 @@
 
 #include "Defines.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <pthread.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#endif
+
 class ShaderProgram {
 
 	enum class Status {
@@ -90,8 +99,9 @@ struct Icosahedron {
 	static std::pair<std::vector<float>, std::vector<uint>>create(uint);
 };
 
+#define USE_BINARY 1
+
 struct FileParser {
-	static volatile float progress;
-	static void parse(std::string, std::vector<float>&, uint&, Vec3&, Vec3&, Vec3&);
+	static void loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims);
 };
 

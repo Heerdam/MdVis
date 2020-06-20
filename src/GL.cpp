@@ -223,14 +223,14 @@ Camera::Camera(bool _isOrtho, const float _viewportWidth, const float _viewportH
 }
 
 void Camera::update() {
-	//normalizeUp();
+	normalizeUp();
 
 	float aspect = viewportWidth / viewportHeight;
-	if(isOrtho)
-		projection = ORTHO(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, ABS(nearPlane), ABS(farPlane));
-	else
-		projection = PERSPECTIVE(TORAD(fieldOfView), aspect, ABS(nearPlane), ABS(farPlane));
-	view = LOOKAT(position, position + direction, up);
+	//if(isOrtho)
+		//projection = ORTHO(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, ABS(nearPlane), ABS(farPlane));
+	//else
+	projection = glm::perspective(glm::radians(fieldOfView), aspect, ABS(nearPlane), ABS(farPlane));
+	view = glm::lookAt(position, position + direction, up);
 	combined = projection * view;
 }
 
@@ -242,7 +242,7 @@ void Camera::lookAt(const Vec3& _pos) {
 
 void Camera::normalizeUp() {
 	right = NOR(CRS(direction, up));
-	up = NOR(CRS(right, direction));
+	//up = NOR(CRS(right, direction));
 }
 
 void Camera::normalizeUpAxisLocked(const Vec3& _up) {
@@ -355,9 +355,39 @@ std::pair<std::vector<float>, std::vector<uint>> Icosahedron::create(uint _subdi
 	return{ v_out, i_out };
 }
 
-float volatile FileParser::progress = 0.f;
+#ifdef USE_BINARY
+void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
+	std::ifstream in(_path, std::ios::binary | std::ios::in);
+	std::vector<char> buffer(std::istreambuf_iterator<char>(in), {});
+	_coords.resize(buffer.size() / sizeof(double)-4);
+	_low.x = _low.y = _low.z = std::numeric_limits<float>::infinity();
+	_up.x = _up.y = _up.z = -std::numeric_limits<float>::infinity();
 
-void FileParser::parse(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
+	_count = static_cast<float>(*reinterpret_cast<double*>(&buffer[0]));
+	_dims[0] = static_cast<float>(*reinterpret_cast<double*>(&buffer[1 * sizeof(double)]));
+	_dims[1] = static_cast<float>(*reinterpret_cast<double*>(&buffer[2 * sizeof(double)]));
+	_dims[2] = static_cast<float>(*reinterpret_cast<double*>(&buffer[3 * sizeof(double)]));
+
+	for (size_t i = 0; i < _coords.size(); i+=3) {
+		float x = static_cast<float>(*reinterpret_cast<double*>(&buffer[(i+4) * sizeof(double)]));
+		float y = static_cast<float>(*reinterpret_cast<double*>(&buffer[(i+5) * sizeof(double)]));
+		float z = static_cast<float>(*reinterpret_cast<double*>(&buffer[(i+6) * sizeof(double)]));
+
+		_coords[i] = x;
+		_coords[i+1] = y;
+		_coords[i+2] = z;
+
+		_low.x = x < _low.x ? x : _low.x;
+		_low.y = y < _low.y ? y : _low.y;
+		_low.z = z < _low.x ? z : _low.z;
+
+		_up.x = x > _up.x ? x : _up.x;
+		_up.y = y > _up.y ? y : _up.y;
+		_up.z = z > _up.x ? z : _up.z;
+	}
+}
+#else
+void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
 	std::fstream in(_path);
 	char line[256];
 	uint i = 0;
@@ -388,8 +418,8 @@ void FileParser::parse(std::string _path, std::vector<float>& _coords, uint& _co
 		}
 		++i;
 	}
-	//std::cout << i << std::endl;
 }
+#endif // USE_BINARY
 
 CameraController::CameraController(Camera* _cam) : camera(_cam){}
 
@@ -418,13 +448,16 @@ void CameraController::cursorCB(double _xpos, double _ypos) {
 		camera->direction = Vec3(res[0], res[1], res[2]);
 
 		Vec3 tmp = NOR(CRS(camera->direction, camera->up));
-
+		//TODO FIX KAMERA GOPFERDAMMI
+		//if(std::isnan(tmp[0]) || std::isnan(tmp[1]) || std::isnan(tmp[2]))
+		//std::cout << glm::to_string(tmp) << std::endl;
 		rot = glm::identity<Mat4>();
 
 		rot = glm::rotate(glm::identity<Mat4>(), deltaY, tmp);
-		res = rot * Vec4(camera->direction, 1.f);
+		res = NOR(rot * Vec4(camera->direction, 1.f));
 		camera->direction = Vec3(res[0], res[1], res[2]);
 
+		
 		camera->update();
 	}
 

@@ -1,9 +1,10 @@
 
 #include "GL.h"
 
-#include <glm/gtx/string_cast.hpp>
+
 
 #include "xoshiro.h"
+#include "OBJ_Loader.h"
 
 #include <sstream>
 #include <map>
@@ -28,15 +29,13 @@ struct Proxy {
 	// -------------------- Inputs --------------------
 	bool rmb_down = false;
 	double oldX = -1.f, oldY = -1.f;
-	float t = 0.f, deltaT = 0.00001f;
+	float t = 0.f, deltaT = 0.0001f;
 
 	// -------------------- Constants --------------------
 	uint ATOMCOUNT, TIMESTEPS, SPHEREVERTICES, INDEXCOUNT;
 	const uint VERTEXSIZE = 3u; //pos
 	const uint SPHEREVERTEXSIZE = 3u; //pos
 	const uint AUXVERTEXSIZE = 3u + 3u + 3u; //nrm + t + bt
-	const uint GUI_MAX_VERTICES = 6000u;
-	const uint GUI_MAX_IDX = 6000u;
 
 	// -------------------- GL --------------------
 	Vec4 clearColor = Vec4(0.03f, 0.09f, 0.22f, 1.f); 
@@ -44,17 +43,26 @@ struct Proxy {
 	bool isGLloaded = false, shouldTerminate = false;
 
 	//shaders
-	ShaderProgram splineShader, compShader, geomShader, lightShader, widgetShader/*, guiShader*/;
+	ShaderProgram splineShader, compShader, geomShader, lightShader, widgetShader, ssaoShader, ssaoBlurShader, fxaaShader;
 
 	//compute pass
 	GLuint c_ssbo_traj, c_ssbo_sphere, cg_vbo, c_ssbo_weights;
 
 	//geometry pass
-	GLuint g_vao, g_fb, g_pos, g_nrm, g_t, g_bt, g_col, g_depth, g_vbo_aux, g_ebo;
+	GLuint g_vao, g_fb, g_pos, g_nrm, g_t, g_bt, g_col, g_depth, g_msaa, g_vbo_aux, g_ebo;
 
 	//light pass
 	std::vector<float> lights;
 	GLuint l_vao;
+
+	//ssao
+	GLuint s_rand, s_fb, s_ssao, ss_b_fb, ss_b_tex;
+	Vec2 s_bounds;
+	float s_samples[3*64];
+	float s_radius = 1.0f, s_bias = 0.025f;
+
+	//fxaa
+	GLuint f_fb, f_tex;
 
 	//forward pass
 	GLuint widget_vao;
@@ -83,14 +91,19 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			_proxy->lightShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/l_shader")).string());
 			_proxy->widgetShader.id = "widget_shader";
 			_proxy->widgetShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/widget_shader")).string());
+			_proxy->ssaoShader.id = "ssao_shader";
+			_proxy->ssaoShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/ssao_shader")).string());
+			_proxy->ssaoBlurShader.id = "ssao_blur_shader";
+			_proxy->ssaoBlurShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/ssao_blur_shader")).string());
+			_proxy->fxaaShader.id = "fxaa_shader";
+			_proxy->fxaaShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/fxaa_shader")).string());
 		});
 	}
 
 	LOG("Loading file: " + _proxy.pathToFile + "\n", _proxy.logMutex);
 
 	//PARSE FILE
-	FileParser::parse(std::filesystem::absolute(std::filesystem::path("../out1.traj")).string(), _proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
-	//FileParser::parse(filesystem::path(_proxy.pathToFile).make_absolute().str(), _proxy.coords, _proxy.ATOMCOUNT);
+	FileParser::loadFile(std::filesystem::absolute(std::filesystem::path("../coords.traj")).string(), _proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
 	_proxy.TIMESTEPS = static_cast<uint>(_proxy.coords.size() / 3) / _proxy.ATOMCOUNT;
 
 	LOG("Atoms: " + std::to_string(_proxy.ATOMCOUNT) + " Steps: " + std::to_string(_proxy.TIMESTEPS) + "\n", _proxy.logMutex);
@@ -119,17 +132,16 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 		//SET UP THE CAMERAS
 		_proxy.cam = Camera(false, _proxy.wWidth, _proxy.wHeight);
 		_proxy.cam.fieldOfView = 50.f;
-		_proxy.cam.nearPlane = 0.001f;
-		_proxy.cam.farPlane = 50000.f;
+		_proxy.cam.nearPlane = 0.01f;
+		_proxy.cam.farPlane = 100.f;
 		_proxy.cam.position = Vec3(cntr[0] + 1.2f * _proxy.dims[0], cntr[1], cntr[2]);
 		_proxy.cam.direction = NOR(cntr - _proxy.cam.position);
 		_proxy.cam.up = Vec3(0.f, 1.f, 0.f);
-		_proxy.cam.height = 0.1f;
 		_proxy.cam.update();
 
 		_proxy.widgetCam = Camera(false, 400.f, 400.f);
 		_proxy.widgetCam.nearPlane = 1.f;
-		_proxy.widgetCam.farPlane = 10000.f;
+		_proxy.widgetCam.farPlane = 50;
 		_proxy.widgetCam.position = Vec3(-50.f, 0.f, 0.f);
 		_proxy.widgetCam.direction = Vec3(1.f, 0.f, 0.f);
 		_proxy.widgetCam.up = Vec3(0.f, 1.f, 0.f);
@@ -180,7 +192,7 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 	_proxy.auxBuffer.resize(_proxy.ATOMCOUNT * _proxy.SPHEREVERTICES * _proxy.AUXVERTEXSIZE);
 	for (uint i = 0; i < _proxy.SPHEREVERTICES; ++i) {
 		//nrm 
-		Vec3 v = Vec3(_proxy.sphere_vertices[3 * i], _proxy.sphere_vertices[3 * i + 1], _proxy.sphere_vertices[3 * i + 2]);
+		Vec3 v = NOR(Vec3(_proxy.sphere_vertices[3 * i], _proxy.sphere_vertices[3 * i + 1], _proxy.sphere_vertices[3 * i + 2]));
 		std::memcpy(_proxy.auxBuffer.data() + i * _proxy.AUXVERTEXSIZE, glm::value_ptr(v), 3 * sizeof(float));
 		//t
 		Vec3 t = NOR(CRS(v, Vec3(0.f, 1.f, 0.f)));		
@@ -408,29 +420,82 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
+
+			/*
 			uint axisII[420];
-			for (uint i = 0; i < 420; ++i)
-				axisII[i] = axisI[i] - 1;
+			uint axisIN[420];
+			for (uint i = 0; i < 420; ++i) {
+				axisII[i] = axisI[2*i] - 1;
+				axisIN[i] = axisI[2 * i + 1] - 1;
+			}
+
+			const uint vertexSize = 9;
+			std::vector<float> vertices(78 * vertexSize);
+			for (uint i = 0; i < 78; ++i) {
+				Vec3 col = Vec3(1.f, 0.f, 0.f);
+				//pos
+				std::memcpy(vertices.data() + vertexSize * i, &axisV[3*i], 3 * sizeof(float));
+				//nrm
+				std::memcpy(vertices.data() + vertexSize * i + 3, &axisN[3*axisIN[i]], 3 * sizeof(float));
+				std::cout << i << " ";
+				//for (uint j = 3 * axisIN[i]; j < 3 * axisIN[i] + 3; ++j)
+					//std::cout << axisN[j] << " ";
+				//std::cout << std::endl;
+				//col
+				std::memcpy(vertices.data() + vertexSize * i + 6, glm::value_ptr(col), 3 * sizeof(float));
+			}
+			*/
+
+			objl::Loader Loader;
+			if (!Loader.LoadFile("../axisnrm.obj")) {
+				std::cout << "ERROR: can't load axisnrm.obj" << std::endl;
+			}
+
+			const uint vertexSize = 9u;
+			objl::Mesh curMesh = Loader.LoadedMeshes[0];
+			std::vector<float> vertices(vertexSize* curMesh.Vertices.size());
+			for (size_t i = 0; i < curMesh.Vertices.size(); ++i) {
+				//pos
+				vertices[vertexSize * i] = curMesh.Vertices[i].Position.X;
+				vertices[vertexSize * i + 1] = curMesh.Vertices[i].Position.Y;
+				vertices[vertexSize * i + 2] = curMesh.Vertices[i].Position.Z;
+				//nrm
+				vertices[vertexSize * i + 3] = curMesh.Vertices[i].Normal.X;
+				vertices[vertexSize * i + 4] = curMesh.Vertices[i].Normal.X;
+				vertices[vertexSize * i + 5] = curMesh.Vertices[i].Normal.X;
+				//col
+				vertices[vertexSize * i + 6] = 1.f;
+				vertices[vertexSize * i + 7] = 0.f;
+				vertices[vertexSize * i + 8] = 0.f;
+			}
 
 			uint vbo_widget;
 			glGenBuffers(1, &vbo_widget);
 			glBindBuffer(GL_ARRAY_BUFFER, vbo_widget);
-			glBufferData(GL_ARRAY_BUFFER, 234 * sizeof(float), axisV, GL_STATIC_DRAW);
+			glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 			uint ebo_widget;
 			glGenBuffers(1, &ebo_widget);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_widget);
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, 420 * sizeof(uint), axisII, GL_STATIC_DRAW);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, curMesh.Indices.size() * sizeof(uint), curMesh.Indices.data(), GL_STATIC_DRAW);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 			glGenVertexArrays(1, &_proxy->widget_vao);
 			glBindVertexArray(_proxy->widget_vao);
 			glBindBuffer(GL_ARRAY_BUFFER, vbo_widget);
-			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+			//pos
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, vertexSize * sizeof(float), (void*)0);
 			glEnableVertexAttribArray(0);
+			//nrm
+			glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, vertexSize * sizeof(float), (void*)(3 * sizeof(float)));
+			glEnableVertexAttribArray(1);
+			//col
+			glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, vertexSize * sizeof(float), (void*)(6 * sizeof(float)));
+			glEnableVertexAttribArray(2);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_widget);
 			glBindVertexArray(0);
+
 		});
 	}
 
@@ -472,7 +537,118 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			glBindVertexArray(0);
 		});
 	}
+	// -------------------- SSAO --------------------
+	{
+		std::lock_guard<std::mutex> lock(_proxy.mutex);
+		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
+			//kernel
+			std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
+			xoshiro_256 generator;
+			std::vector<Vec3> ssaoKernel;
+			for (unsigned int i = 0; i < 64; ++i) {
+				glm::vec3 sample(randomFloats(generator) * 2.f - 1.f, randomFloats(generator) * 2.f - 1.f, randomFloats(generator));
+				sample = glm::normalize(sample);
+				sample *= randomFloats(generator);
+				float scale = float(i) / 64.0;
+				scale = 0.1f - (scale * scale)*(1.0f - 0.1f);
+				sample *= scale;
+				ssaoKernel.push_back(sample);
+			}
+			std::memcpy(_proxy->s_samples, ssaoKernel.data(), 64 * sizeof(Vec3));
 
+			//noise
+			_proxy->s_bounds = Vec2(_proxy->wWidth, _proxy->wHeight);
+			std::vector<Vec3> ssaoNoise;
+			for (unsigned int i = 0; i < 16; i++)
+				ssaoNoise.emplace_back(randomFloats(generator) * 2.f - 1.f, randomFloats(generator) * 2.f - 1.f, 0.f);
+			
+			//noise tex
+			glGenTextures(1, &_proxy->s_rand);
+			glBindTexture(GL_TEXTURE_2D, _proxy->s_rand);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 4, 4, 0, GL_RGB, GL_FLOAT, ssaoNoise.data());
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			glBindTexture(GL_TEXTURE_2D, 0);
+
+			//fb
+			glGenFramebuffers(1, &_proxy->s_fb);
+			glBindFramebuffer(GL_FRAMEBUFFER, _proxy->s_fb);
+
+			glGenTextures(1, &_proxy->s_ssao);
+			glBindTexture(GL_TEXTURE_2D, _proxy->s_ssao);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, _proxy->wWidth, _proxy->wHeight, 0, GL_RED, GL_FLOAT, NULL);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _proxy->s_ssao, 0);
+
+			GLuint attachments[1] = { GL_COLOR_ATTACHMENT0 };
+			glDrawBuffers(1, attachments);
+
+			//depth
+			glBindRenderbuffer(GL_RENDERBUFFER, _proxy->g_depth);
+			//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, _proxy->wWidth, _proxy->wHeight);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
+
+			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+				LOG("Framebuffer not complete (SSAO)! Shutting down...", _proxy->logMutex);
+				_proxy->shouldTerminate = true;
+			}
+
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+			//Blur
+			glGenFramebuffers(1, &_proxy->ss_b_fb);
+			glBindFramebuffer(GL_FRAMEBUFFER, _proxy->ss_b_fb);
+			glGenTextures(1, &_proxy->ss_b_tex);
+			glBindTexture(GL_TEXTURE_2D, _proxy->ss_b_tex);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, _proxy->wWidth, _proxy->wHeight, 0, GL_RED, GL_FLOAT, NULL);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _proxy->ss_b_tex, 0);
+		});
+	}
+	// -------------------- FXAA --------------------
+	if(false)
+	{
+		std::lock_guard<std::mutex> lock(_proxy.mutex);
+		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
+
+			glGenFramebuffers(1, &_proxy->f_fb);
+			glBindFramebuffer(GL_FRAMEBUFFER, _proxy->f_fb);
+
+			glGenTextures(1, &_proxy->f_tex);
+			glBindTexture(GL_TEXTURE_2D, _proxy->f_tex);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, _proxy->wWidth, _proxy->wHeight, 0, GL_RGB, GL_FLOAT, NULL);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _proxy->f_tex, 0);
+
+			GLuint attachments[1] = { GL_COLOR_ATTACHMENT0 };
+			glDrawBuffers(1, attachments);
+
+			//depth
+			glBindRenderbuffer(GL_RENDERBUFFER, _proxy->g_depth);
+			//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, _proxy->wWidth, _proxy->wHeight);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
+
+			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+				LOG("Framebuffer not complete (FXAA)! Shutting down...", _proxy->logMutex);
+				_proxy->shouldTerminate = true;
+			}
+
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			
+		});
+	}
+	// -------------------- Finalizing --------------------
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
@@ -514,7 +690,6 @@ int main() {
 	glfwWindowHint(GLFW_REFRESH_RATE, 60);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-	glfwWindowHint(GLFW_SAMPLES, 16);
 	glfwWindowHint(GLFW_DEPTH_BITS, 24);
 	glfwWindowHint(GLFW_STENCIL_BITS, 8);
 
@@ -545,10 +720,10 @@ int main() {
 
 	//TODO 	LOG("Max Dispatch groups: " + std::to_string(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS) + "\n", _proxy.logMutex);
 
-	glEnable(GL_DEPTH_TEST);
+	
 	glEnable(GL_STENCIL_TEST);
-	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_DEBUG_OUTPUT);
+	glEnable(GL_DEPTH_TEST);
 	glDebugMessageCallback(MessageCallback, 0);
 
 	// -------------------- SET UP CALLBACKS --------------------
@@ -568,6 +743,25 @@ int main() {
 		if (!proxy->isGLloaded) return;
 		if (_key == GLFW_KEY_SPACE)
 			proxy->t = 0.f;
+
+		//radius
+		if (_key == GLFW_KEY_1) {
+			proxy->s_radius += 0.1f;
+			std::cout << proxy->s_radius << std::endl;
+		}
+		if (_key == GLFW_KEY_2) {
+			proxy->s_radius -= 0.1f;
+			std::cout << proxy->s_radius << std::endl;
+		}
+		//bias
+		if (_key == GLFW_KEY_3) {
+			proxy->s_bias += 0.05f;
+			std::cout << proxy->s_bias << std::endl;
+		}
+		if (_key == GLFW_KEY_4) {
+			proxy->s_bias -= 0.05f;
+			std::cout << proxy->s_bias << std::endl;
+		}
 	});
 	
 	glfwSetCursorPosCallback(proxy.window, [](GLFWwindow* _window, double _xpos, double _ypos)->void {
@@ -607,6 +801,7 @@ int main() {
 		}
 
 		glStencilMask(~0);
+		glClearDepth(1.f);
 		glClearColor(proxy.clearColor[0], proxy.clearColor[1], proxy.clearColor[2], proxy.clearColor[3]);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
@@ -621,144 +816,234 @@ int main() {
 		if (proxy.isGLloaded) {
 
 			proxy.controller.update(proxy.window, 1.f / 60.f);
-			
+						
 			// -------------------- Compute Pass --------------------
-			proxy.compShader.bind();
+			{
+				proxy.compShader.bind();
 
-			//buffers
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, proxy.c_ssbo_sphere);
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, proxy.cg_vbo);
-			//if(proxy.TIMESTEPS > 1)
+				//buffers
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, proxy.c_ssbo_sphere);
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, proxy.cg_vbo);
+				//if(proxy.TIMESTEPS > 1)
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, proxy.c_ssbo_weights);
-			//else
+				//else
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, proxy.c_ssbo_traj);
 
-			//uniforms
-			glUniform1ui(1, proxy.ATOMCOUNT);
-			glUniform1i(2, proxy.TIMESTEPS);
-			glUniform1f(3, proxy.t);
-			glUniform1ui(4, proxy.SPHEREVERTICES);
-			glUniform1f(5, 0.05f);
-			glUniform4f(6, 0.75f, 0.5f, 0.4f, 1.f);
-			glUniform1f(7, 1.f / proxy.TIMESTEPS);
-			glUniform3fv(8, 1, glm::value_ptr(proxy.dims));
+				//uniforms
+				glUniform1ui(1, proxy.ATOMCOUNT);
+				glUniform1i(2, proxy.TIMESTEPS);
+				glUniform1f(3, proxy.t);
+				glUniform1ui(4, proxy.SPHEREVERTICES);
+				glUniform1f(5, 0.05f);
+				glUniform4f(6, 0.75f, 0.5f, 0.4f, 1.f);
+				glUniform1f(7, 1.f / proxy.TIMESTEPS);
+				glUniform3fv(8, 1, glm::value_ptr(proxy.dims));
 
-			glMemoryBarrier(GL_ALL_BARRIER_BITS);
-			glDispatchCompute(proxy.ATOMCOUNT, 1, 1);
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
+				glDispatchCompute(proxy.ATOMCOUNT, 1, 1);
 
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
 
-			proxy.compShader.unbind();
+				proxy.compShader.unbind();
 
-			glMemoryBarrier(GL_ALL_BARRIER_BITS);
-
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
+			}
 			// -------------------- Geometry Pass --------------------
-			glBindFramebuffer(GL_FRAMEBUFFER, proxy.g_fb);
-			//glClearColor(0.5f, 0.5f, 0.5f, 1.f);
-			glStencilMask(~0);
-			glClearColor(proxy.clearColor[0], proxy.clearColor[1], proxy.clearColor[2], proxy.clearColor[3]);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+			{
+				//glEnable(GL_DEPTH_TEST);
 
-			proxy.geomShader.bind();
-			glBindVertexArray(proxy.g_vao);
+				glBindFramebuffer(GL_FRAMEBUFFER, proxy.g_fb);
+				glClearColor(0.5f, 0.5f, 0.5f, 1.f);
+				glStencilMask(~0);
+				glClearDepth(1.f);
+				glClearColor(0.f, 0.f, 0.f, 0.f);
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-			glUniform4fv(9, 1, glm::value_ptr(proxy.atomColor));
-			glUniformMatrix4fv(10, 1, false, glm::value_ptr(proxy.cam.combined));
+				proxy.geomShader.bind();
+				glBindVertexArray(proxy.g_vao);
 
-			glStencilMask(0xFF);
-			glStencilFunc(GL_ALWAYS, 1, 0xFF);
-			glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+				glUniform4fv(9, 1, glm::value_ptr(proxy.atomColor));
+				glUniformMatrix4fv(10, 1, false, glm::value_ptr(proxy.cam.combined));
+				glStencilMask(0xFF);
+				glStencilFunc(GL_ALWAYS, 1, 0xFF);
+				glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 
-			glDrawElements(GL_TRIANGLES, proxy.INDEXCOUNT, GL_UNSIGNED_INT, (void*)0);
+				glDrawElements(GL_TRIANGLES, proxy.INDEXCOUNT, GL_UNSIGNED_INT, (void*)0);
 
-			glBindVertexArray(0);
-			proxy.geomShader.unbind();
+				glBindVertexArray(0);
+				proxy.geomShader.unbind();
 
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, proxy.g_fb);
-			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-			glBlitFramebuffer(0, 0, proxy.wWidth, proxy.wHeight, 0, 0, proxy.wWidth, proxy.wHeight, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}		
+			// -------------------- Copy Depth and Stencil --------------------
+			{
+				glBindFramebuffer(GL_READ_FRAMEBUFFER, proxy.g_fb);
+				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+				glBlitFramebuffer(0, 0, proxy.wWidth, proxy.wHeight, 0, 0, proxy.wWidth, proxy.wHeight, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
+			// -------------------- SSAO --------------------
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, proxy.s_fb);
+				glClearDepth(1.f);
+				glClearColor(0.f, 0.f, 0.f, 0.f);
+				glClear(GL_COLOR_BUFFER_BIT);
+				proxy.ssaoShader.bind();
 
+				glBindVertexArray(proxy.l_vao);
+
+				//bind gbuffer
+				glUniform1i(2, 0);
+				glUniform1i(3, 1);
+				glUniform1i(4, 2);
+				glUniform1i(5, 3);
+				glUniform1i(7, 4);
+
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, proxy.g_pos);
+				glActiveTexture(GL_TEXTURE1);
+				glBindTexture(GL_TEXTURE_2D, proxy.g_nrm);
+				glActiveTexture(GL_TEXTURE2);
+				glBindTexture(GL_TEXTURE_2D, proxy.g_t);
+				glActiveTexture(GL_TEXTURE3);
+				glBindTexture(GL_TEXTURE_2D, proxy.g_bt);
+
+				glActiveTexture(GL_TEXTURE4);
+				glBindTexture(GL_TEXTURE_2D, proxy.s_rand);
+
+				glUniformMatrix4fv(8, 1, false, glm::value_ptr(proxy.cam.projection));
+				glUniform2fv(9, 1, glm::value_ptr(proxy.s_bounds));
+				glUniform1f(10, proxy.s_radius);
+				glUniform1f(11, proxy.s_bias);
+				glUniformMatrix4fv(12, 1, false, glm::value_ptr(proxy.cam.view));
+				glUniform1fv(13, 3*64, proxy.s_samples);
+
+				glDrawElements(GL_TRIANGLES, 6u, GL_UNSIGNED_INT, (void*)0);
+
+				glBindVertexArray(0);
+				proxy.ssaoShader.unbind();
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
+			// -------------------- SSAO Blur --------------------
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, proxy.ss_b_fb);
+				glClear(GL_COLOR_BUFFER_BIT);
+
+				proxy.ssaoBlurShader.bind();
+				glBindVertexArray(proxy.l_vao);
+
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, proxy.s_ssao);
+
+				glDrawElements(GL_TRIANGLES, 6u, GL_UNSIGNED_INT, (void*)0);
+
+				glBindVertexArray(0);
+				proxy.ssaoBlurShader.unbind();
+
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
 			// -------------------- Lightning Pass --------------------
-		
-			proxy.lightShader.bind();
+			{
+				//glBindFramebuffer(GL_FRAMEBUFFER, proxy.f_fb);
+				//glClearColor(0.f, 0.f, 0.f, 0.f);
+				//glClear(GL_COLOR_BUFFER_BIT);
+				proxy.lightShader.bind();
 
-			glBindVertexArray(proxy.l_vao);
+				glBindVertexArray(proxy.l_vao);
 
-			//bind gbuffer
-			glUniform1i(2, 0);
-			glUniform1i(3, 1);
-			glUniform1i(4, 2);
-			glUniform1i(5, 3);
-			glUniform1i(6, 4);
-			
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, proxy.g_pos);
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, proxy.g_nrm);
-			glActiveTexture(GL_TEXTURE2);
-			glBindTexture(GL_TEXTURE_2D, proxy.g_t);
-			glActiveTexture(GL_TEXTURE3);
-			glBindTexture(GL_TEXTURE_2D, proxy.g_bt);
-			glActiveTexture(GL_TEXTURE4);
-			glBindTexture(GL_TEXTURE_2D, proxy.g_col);
+				//bind gbuffer
+				glUniform1i(2, 0);
+				glUniform1i(3, 1);
+				glUniform1i(4, 2);
+				glUniform1i(5, 3);
+				glUniform1i(6, 4);
+				glUniform1i(7, 5);
 
-			//uniforms
-			glUniformMatrix4fv(7, 1, false, glm::value_ptr(proxy.cam.combined));
-			glUniform1fv(10, proxy.lights.size(), proxy.lights.data());
-		
-			glStencilMask(0x00);
-			glStencilFunc(GL_EQUAL, 1, 0xFF);
-			glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, proxy.g_pos);
+				glActiveTexture(GL_TEXTURE1);
+				glBindTexture(GL_TEXTURE_2D, proxy.g_nrm);
+				glActiveTexture(GL_TEXTURE2);
+				glBindTexture(GL_TEXTURE_2D, proxy.g_t);
+				glActiveTexture(GL_TEXTURE3);
+				glBindTexture(GL_TEXTURE_2D, proxy.g_bt);
+				glActiveTexture(GL_TEXTURE4);
+				glBindTexture(GL_TEXTURE_2D, proxy.g_col);
+				glActiveTexture(GL_TEXTURE5);
+				glBindTexture(GL_TEXTURE_2D, proxy.ss_b_tex);
+				
+				//uniforms
+				glUniform3fv(8, 1, glm::value_ptr(proxy.cam.position));
+				glUniform1fv(12, proxy.lights.size(), proxy.lights.data());
 
-			glDrawElements(GL_TRIANGLES, 6u, GL_UNSIGNED_INT, (void*)0);
+				glStencilMask(0x00);
+				glStencilFunc(GL_EQUAL, 1, 0xFF);
+				glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
-			glStencilFunc(GL_ALWAYS, 1, 0xFF);
+				glDrawElements(GL_TRIANGLES, 6u, GL_UNSIGNED_INT, (void*)0);
 
-			glBindVertexArray(0);
-			proxy.lightShader.unbind();
-					
+				glStencilFunc(GL_ALWAYS, 1, 0xFF);
+
+				glBindVertexArray(0);
+				proxy.lightShader.unbind();
+				//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
+			// -------------------- FXAA Pass --------------------
+			if(false)
+			{
+				proxy.fxaaShader.bind();
+				glBindVertexArray(proxy.l_vao);
+
+				glUniform2f(3, 1.0f / proxy.wWidth, 1.0f / proxy.wHeight);
+
+				glUniform1i(0, 0);
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, proxy.f_tex);
+
+				//glDrawElements(GL_TRIANGLES, 6u, GL_UNSIGNED_INT, (void*)0);
+
+				glBindVertexArray(0);
+				proxy.fxaaShader.unbind();
+			}		
 			
 			// -------------------- Forward Pass --------------------
-			glViewport(0, 0, proxy.widgetWidth, proxy.widgetHeight);
-
-			glBindVertexArray(proxy.widget_vao);
-			proxy.widgetShader.bind();
-
-			Mat4 rot;
 			{
-				rot[0][0] = proxy.cam.direction.x; rot[0][1] = proxy.cam.direction.y;  rot[0][2] = proxy.cam.direction.z;  rot[0][3] = 0.0f;
-				rot[1][0] = proxy.cam.right.x; rot[1][1] = proxy.cam.right.y;  rot[1][2] = proxy.cam.right.z;  rot[1][3] = 0.0f;
-				rot[2][0] = proxy.cam.up.x; rot[2][1] = proxy.cam.up.y;  rot[2][2] = proxy.cam.up.z;  rot[2][3] = 0.0f;
-				rot[3][0] = 0.f; rot[3][1] = 0.f;  rot[3][2] = 0.f;  rot[3][3] = 1.0f;
+				glClearDepth(1.f);
+				glClear(GL_DEPTH_BUFFER_BIT);
+				glViewport(0, 0, proxy.widgetWidth, proxy.widgetHeight);
+
+				glBindVertexArray(proxy.widget_vao);
+				proxy.widgetShader.bind();
+
+				
+				Mat4 rot = glm::lookAt(proxy.cam.position, proxy.cam.position + proxy.cam.direction, proxy.cam.up);
+				proxy.widgetCam.position = rot * Vec4(-1.f, 0.f, 0.f, 1.f) * 5.f;
+				proxy.widgetCam.direction = NOR(-proxy.widgetCam.position);
+				proxy.widgetCam.update();
+
+				glUniform3fv(3, 1, glm::value_ptr(proxy.widgetCam.position));
+				glUniformMatrix4fv(4, 1, false, glm::value_ptr(proxy.widgetCam.combined));
+
+				glDrawElements(GL_TRIANGLES, 420, GL_UNSIGNED_INT, (void*)0);
+
+				proxy.widgetShader.unbind();
+				glBindVertexArray(0);
+
+				// -------------------- SYNC --------------------
+				glClientWaitSync(sync[index], GL_SYNC_FLUSH_COMMANDS_BIT, 1000);
+				glDeleteSync(sync[index]);
+				sync[index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+				index = (index++) % 2;
 			}
-
-			glUniformMatrix4fv(1, 1, false, glm::value_ptr(proxy.widgetCam.combined));
-			glUniformMatrix4fv(2, 1, false, glm::value_ptr(rot));
-
-			glDrawElements(GL_TRIANGLES, 420, GL_UNSIGNED_INT, (void*)0);
-
-			proxy.widgetShader.unbind();
-			glBindVertexArray(0);
-			
-			
-
-			// -------------------- SYNC --------------------
-			glClientWaitSync(sync[index], GL_SYNC_FLUSH_COMMANDS_BIT, 1000);
-			glDeleteSync(sync[index]);
-			sync[index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-			index = (index++) % 2;
-		
 
 		// -------------------- FPS --------------------
 			frame++;
 			if (ctime - time >= 1.0) {
 				//LOG(std::to_string(proxy.t) + " " + std::to_string(frame), proxy.logMutex);
-				std::cout << proxy.t << " " << frame << std::endl;
+				//std::cout << proxy.t << " " << frame << std::endl;
 				frame = 0;
 				time = ctime;
 			}

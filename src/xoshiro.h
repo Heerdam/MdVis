@@ -4,6 +4,11 @@
 #include <cstdint>
 #include <random>
 
+#ifdef min
+#undef min
+#undef max
+#endif // min
+
 using std::uint64_t;
 static inline uint64_t rotl(const uint64_t x, int k) {
 	return (x << k) | (x >> (64 - k));

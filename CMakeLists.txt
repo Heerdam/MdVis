@@ -12,7 +12,7 @@ add_executable(mdvis
 	src/main.cpp 
 	src/Spline.hpp
 	src/xoshiro.h
-
+	src/OBJ_Loader.h
 )
 
 add_subdirectory("${CMAKE_SOURCE_DIR}/libs/glm-0.9.9.8")
