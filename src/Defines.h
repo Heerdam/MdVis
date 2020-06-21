@@ -1,6 +1,6 @@
 #pragma once
 
-#include <GL/glew.h>
+#include <glad/glad.h>
 
 #include <GLFW/glfw3.h>
 
@@ -8,17 +8,7 @@
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 
-#include <glm/ext/vector_uint2.hpp>
-#include <glm/ext/vector_uint3.hpp>
-#include <glm/ext/vector_uint4.hpp>
-
-#include <glm/ext/vector_int2.hpp>
-#include <glm/ext/vector_int3.hpp>
-#include <glm/ext/vector_int4.hpp>
-
 #include <glm/ext/matrix_float4x4.hpp>
-
-#include <glm/gtx/quaternion.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -34,7 +24,6 @@
 #include <functional>
 #include <array>
 #include <thread>
-#include <atomic>
 #include <queue>
 #include <mutex>
 #include <chrono>
@@ -42,21 +31,40 @@
 #include <unordered_map>
 #include <memory>
 #include <forward_list>
+#include <chrono>
 
 #define GLM_FORCE_RADIANS
 
-#define SSAO_KERNEL_SIZE 64
+// -------------------- Configuration --------------------
+#define WINDOW_WIDTH 1920
+#define WINDOW_HEIGHT 1080
+#define WIDGET_WIDTH 400
+#define WIDGET_HEIGHT 400
+
+/*
+	0 - no interpolation
+	1 - linear interpoltation
+	2 - cubic spline interpolation
+*/
+#define INTERPOLATION_TYPE 2
+
+/*
+	Defines how many times the icosahedron gets subdivided. More subdivison means smoother surface
+	but more vertices to draw. High impact on performance.
+	Valid range: [0,n)
+	Recommended: 2
+*/
+#define SPHERE_SUBDIVISIONS 2
+
+#define WIDGET_SHOW 1
+
+#define LOG_FRAMES 0
+
+
+
 
 typedef unsigned int uint;
 typedef unsigned short ushort;
-
-typedef glm::ivec2 Vec2i;
-typedef glm::ivec3 Vec3i;
-typedef glm::ivec4 Vec4i;
-
-typedef glm::uvec2 Vec2u;
-typedef glm::uvec3 Vec3u;
-typedef glm::uvec4 Vec4u;
 
 typedef glm::vec2 Vec2;
 typedef glm::vec3 Vec3;
@@ -69,134 +77,5 @@ typedef glm::vec4 Vec4;
 typedef glm::mat3 Mat3;
 typedef glm::mat4 Mat4;
 
-#define M00(X) (X[0][0])
-#define M01(X) (X[0][1])
-#define M02(X) (X[0][2])
-#define M03(X) (X[0][3])
-
-#define M10(X) (X[1][0])
-#define M11(X) (X[1][1])
-#define M12(X) (X[1][2])
-#define M13(X) (X[1][3])
-
-#define M20(X) (X[2][0])
-#define M21(X) (X[2][1])
-#define M22(X) (X[2][2])
-#define M23(X) (X[2][3])
-
-#define M30(X) (X[3][0])
-#define M31(X) (X[3][1])
-#define M32(X) (X[3][2])
-#define M33(X) (X[3][3])
-
-typedef glm::quat Quat;
-
-#define CRS(X, Y) (glm::cross((X), (Y)))
-#define DOT(X, Y) (glm::dot((X), (Y)))
-#define DIS(X, Y) (glm::distance((X), (Y)))
-#define LEN(X) (glm::length((X)))
-#define NOR(X) (glm::normalize((X)))
-
-#define DET(X) (glm::determinant((X)))
-#define INV(X) (glm::inverse((X)))
-#define TR(X) (glm::transpose((X)))
-#define ToArray(X) (glm::value_ptr((X)))
-
-/*returns an identity 4x4 matrix*/
-#define IDENTITY glm::identity<Mat4>()
-
-/*Creates a frustum matrix.*/
-#define FRUSTUM(LEFT, RIGHT, BOTTOM, TOP, NEARPLANE, FARPLANE) (gml::frustm((LEFT), (RIGHT), (BOTTOM), (TOP), (NEARPLANE), (FARPLANE)))
-
-/*Creates a matrix for a symmetric perspective-view frustum with far plane at infinite.
-FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
-#define INFINITEPERSPECTIVE(FOVY, ASPECT, NEARPLANE) (gml::infinitePerspective((FOVY), (ASPECT), (NEARPLANE)))
-
-/*Build a look at view matrix.
-EYE: Position of the camera
-CENTER: Position where the camera is looking at
-UP: Normalized up vector, how the camera is oriented. Typically (0, 0, 1)*/
-#define LOOKAT(EYE, CENTER, UP) (glm::lookAt((EYE), (CENTER), (UP)))
-
-/*Creates a matrix for an orthographic parallel viewing volume.*/
-#define ORTHO(LEFT, RIGHT, BOTTOM, TOP, ZNEAR, ZFAR) (glm::ortho((LEFT), (RIGHT), (BOTTOM), (TOP), (ZNEAR), (ZFAR)))
-
-/*Creates a matrix for projecting two-dimensional coordinates onto the screen.*/
-#define ORTHO2D(LEFT, RIGHT, BOTTOM, TOP) (glm::ortho((LEFT), (RIGHT), (BOTTOM), (TOP)))
-
-/*Creates a matrix for a symetric perspective-view frustum.
-FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
-#define PERSPECTIVE(FOVY, ASPECT, NEARPLANE, FARPLANE) (glm::perspective((FOVY), (ASPECT), (NEARPLANE), (FARPLANE)))
-
-/*Builds a perspective projection matrix based on a field of view.
-FOVY: Expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise*/
-#define PERSPECTIVEFOV(FOV, WIDTH, HEIGHT, NEARPLANE, FARPLANE) glm::perspectiveFov((FOV), (WIDTH), (HEIGHT), (NEARPLANE), (FARPLANE))
-
-/*Define a picking region.*/
-#define PICKMATRIX(CENTER, DELTA, VIEWPORT) (glm::pickMatrix((CENTER), (DELTA), (VIEWPORT))
-
-/*Map the specified object coordinates (OBJECT.x, OBJECT.y, OBJECT.z) into window coordinates.*/
-#define PROJECT(OBJECT, MODEL, PROJ, VIEWPORT) (glm::project((OBJECT), (MODEL), (PROJ), (VIEWPORT)))
-
-/*Map the specified window coordinates (WINDOW.x, WINDOW.y, WINDOW.z) into object coordinates.*/
-#define UNPROJECT(WINDOW, MODEL, PROJ, VIEWPORT) (glm::unProject((WINDOW), (MODEL), (PROJ), (VIEWPORT)))
-
-/*Builds a rotation 4 * 4 matrix created from an axis vector and an angle.
-	INPUTMATRIX: Input matrix multiplied by this rotation matrix.
-	ANGLE: Rotation angle expressed in radians if GLM_FORCE_RADIANS is define or degrees otherwise.
-	AXIS: Rotation axis, recommanded to be normalized.*/
-#define ROTATEMATRIX(INPUTMATRIX, ANGLE, AXIS) (glm::rotate((INPUTMATRIX), (ANGLE), (AXIS)))
-
-	/*Builds a scale 4 * 4 matrix created from 3 scalars.
-		INPUTMATRIX: Input matrix multiplied by this scale matrix.
-		SCALERATIO: Ratio of scaling for each axis.
-	*/
-#define SCALEMATRIX(INPUTMATRIX, SCALERATIO) (glm::scale((INPUTMATRIX), (SCALERATIO)))
-
-	/*Builds a translation 4 * 4 matrix created from a vector of 3 components.
-		INPUTMATRIX: Input matrix multiplied by this translation matrix.
-		TRANSLATIONVECTOR: Coordinates of a translation vector.*/
-#define TRANSLATIONMATRIX(INPUTMATRIX, TRANSLATIONVECTOR) (glm::translate((INPUTMATRIX), (TRANSLATIONVECTOR)))
-
-#define TOMAT4(X) (glm::toMat4((X)))
-#define EULER(X) (glm::eulerAngles((X)))
-#define ROLL(X) (glm::roll((X)))
-#define YAW(X) (glm::yaw((X))))
-#define PITCH(X) (glm::pitch((X)))
-
 #define PI 3.14159265358979323846
-#define DEGTORAD static_cast<float>(PI / 180.0)
-#define TORAD(X) ((X) * DEGTORAD)
-#define RADTODEG static_cast<float>(180.0 / PI)
-#define TODEG(X) ((X) * RADTODEG)
-#define ABS(X) (std::fabs(X))
-#define CLAMP(X, MIN, MAX) (std::clamp((X), (MIN), (MAX)))
-#define SIN(X) (std::sin(X))
-#define ASIN(X) (std::asin(X))
-#define COS(X) (std::cos(X))
-#define ACOS(X) (std::acos(X))
-#define TAN(X) (std::tan(X))
-#define ATAN(X) (std::atan(X))
-#define INF (std::numeric_limits<float>::infinity())
-#define SQRT(X) (std::sqrt((X)))
-#define POW(X, Y) (std::pow((X), (Y)))
 
-#define colF(X) ((X)/255.f)
-
-
-inline void LOG(const std::string _in, std::mutex& _mutex) {
-	std::lock_guard<std::mutex> lock(_mutex);
-	std::cout << _in << std::endl;
-};
-
-inline void LOG(const std::string _in) {
-	std::cout << _in << std::endl;
-};
-
-inline void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
-	const GLchar* message, const void* userParam) {
-	if (type != GL_DEBUG_TYPE_ERROR) return;
-	fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-		(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-		type, severity, message);
-}

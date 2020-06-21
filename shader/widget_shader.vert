@@ -1,4 +1,4 @@
-#version 460 core
+#version 430 core
 
 layout (location = 0) in vec3 pos;
 layout (location = 1) in vec3 nrm;
@@ -7,8 +7,8 @@ layout (location = 2) in vec3 col;
 layout (location = 4) uniform mat4 cam;
 layout (location = 5) uniform mat4 invCam;
 
-out vec3 normal;
-out vec3 color;
+flat out vec3 normal;
+flat out vec3 color;
 out vec3 fragPos;
 
 /*

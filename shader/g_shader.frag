@@ -1,5 +1,5 @@
 
-#version 460 core
+#version 430 core
 
 layout(location = 0) out vec3 g_pos;
 layout(location = 1) out vec3 g_nrm;

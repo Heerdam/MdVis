@@ -105,3 +105,18 @@ struct FileParser {
 	static void loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims);
 };
 
+class Logger {
+
+	Logger() {};
+
+	static Logger* instance;
+
+	std::mutex mutex;
+	std::chrono::high_resolution_clock::time_point start;
+
+public:
+	static void init();
+	static void LOG(const std::string&, bool);
+	static Logger* get();
+};
+

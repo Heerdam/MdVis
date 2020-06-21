@@ -1,22 +1,40 @@
 
 #include "GL.h"
 
+Logger* Logger::instance = new Logger();
+
+void Logger::init() {
+	get()->start = std::chrono::high_resolution_clock::now();
+};
+
+void Logger::LOG(const std::string& _string, bool _ts) {
+	std::lock_guard<std::mutex>(get()->mutex);
+	std::chrono::duration<float> elapsed = std::chrono::high_resolution_clock::now() - get()->start;
+	float ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+	float s = ms / 1000.f;
+	std::cout << (_ts ? "[" + std::to_string(s) + "s]" : "\t") << "\t" << _string << std::endl;
+};
+
+Logger* Logger::get() {
+	return instance;
+};
+
 void ShaderProgram::print(std::string _id, ShaderProgram::Status _compComp, ShaderProgram::Status _compVert,
 	ShaderProgram::Status _compGeom, ShaderProgram::Status _compFrag, ShaderProgram::Status _link, std::string _errorLog) {
 	if (!printDebug) return;
-	LOG("   Shader: " + std::string(_id));
-	LOG("Compiling: "
+	Logger::LOG("   Shader: " + std::string(_id), true);
+	Logger::LOG("Compiling: "
 		+ std::string(_compComp == Status::failed ? " X |" : _compComp == Status::success ? " S |" : " - |")
 		+ std::string(_compVert == Status::failed ? " X |" : _compVert == Status::success ? " S |" : " - |")
 		+ std::string(_compGeom == Status::failed ? " X |" : _compGeom == Status::success ? " S |" : " - |")
 		+ std::string(_compFrag == Status::failed ? " X |" : _compFrag == Status::success ? " S |" : " - |")
-		+ "");
-	LOG("  Linking: " + std::string(_link == Status::failed ? "Failed!" : _link == Status::success ? "Success!" : " - "));
+		+ "", false);
+	Logger::LOG("  Linking: " + std::string(_link == Status::failed ? "Failed!" : _link == Status::success ? "Success!" : " - "), false);
 
 	if (!_errorLog.empty()) {
-		LOG(std::string(_errorLog) + "\n");
+		Logger::LOG(std::string(_errorLog) + "\n", false);
 	} else
-		LOG("\n");
+		Logger::LOG("\n", false);
 
 }
 
@@ -26,28 +44,28 @@ bool ShaderProgram::compileFromFile(const std::string& _path) {
 	bool gExists = true;
 	bool fExists = true;
 
-	std::ifstream comp(_path + ".comp");
-	cExists = comp.good();
+	std::ifstream compB(_path + ".comp");
+	cExists = compB.good();
 
-	std::ifstream vert(_path + ".vert");
-	vExists = vert.good();
+	std::ifstream vertB(_path + ".vert");
+	vExists = vertB.good();
 
-	std::ifstream geom(_path + ".geom");
-	gExists = geom.good();
+	std::ifstream geomB(_path + ".geom");
+	gExists = geomB.good();
 
-	std::ifstream frag(_path + ".frag");
-	fExists = frag.good();
+	std::ifstream fragB(_path + ".frag");
+	fExists = fragB.good();
 
 	bool success = compile(
-		(cExists ? std::string{ std::istreambuf_iterator<char>(comp), std::istreambuf_iterator<char>() } : "").c_str(),
-		(vExists ? std::string{ std::istreambuf_iterator<char>(vert), std::istreambuf_iterator<char>() } : "").c_str(),
-		(gExists ? std::string{ std::istreambuf_iterator<char>(geom), std::istreambuf_iterator<char>() } : "").c_str(),
-		(fExists ? std::string{ std::istreambuf_iterator<char>(frag), std::istreambuf_iterator<char>() } : "").c_str());
+		(cExists ? std::string{ std::istreambuf_iterator<char>(compB), std::istreambuf_iterator<char>() } : "").c_str(),
+		(vExists ? std::string{ std::istreambuf_iterator<char>(vertB), std::istreambuf_iterator<char>() } : "").c_str(),
+		(gExists ? std::string{ std::istreambuf_iterator<char>(geomB), std::istreambuf_iterator<char>() } : "").c_str(),
+		(fExists ? std::string{ std::istreambuf_iterator<char>(fragB), std::istreambuf_iterator<char>() } : "").c_str());
 
-	comp.close();
-	vert.close();
-	geom.close();
-	frag.close();
+	compB.close();
+	vertB.close();
+	geomB.close();
+	fragB.close();
 
 	return success;
 }
@@ -229,33 +247,33 @@ void Camera::update() {
 	//if(isOrtho)
 		//projection = ORTHO(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, ABS(nearPlane), ABS(farPlane));
 	//else
-	projection = glm::perspective(glm::radians(fieldOfView), aspect, ABS(nearPlane), ABS(farPlane));
+	projection = glm::perspective(glm::radians(fieldOfView), aspect, std::abs(nearPlane), std::abs(farPlane));
 	view = glm::lookAt(position, position + direction, up);
 	combined = projection * view;
 }
 
 void Camera::lookAt(const Vec3& _pos) {
-	direction = NOR(_pos - position);
+	direction = glm::normalize(_pos - position);
 	normalizeUp();
-	view = LOOKAT(position, _pos, up);
+	view = glm::lookAt(position, _pos, up);
 }
 
 void Camera::normalizeUp() {
-	right = NOR(CRS(direction, up));
+	right = glm::normalize(glm::cross(direction, up));
 	//up = NOR(CRS(right, direction));
 }
 
 void Camera::normalizeUpAxisLocked(const Vec3& _up) {
-	right = NOR(CRS(_up, direction));
-	up = NOR(CRS(direction, right));
+	right = glm::normalize(glm::cross(_up, direction));
+	up = glm::normalize(glm::cross(direction, right));
 	if (std::isnan(up[0]) || std::isnan(up[1]) || std::isnan(up[2]))
 		up = _up;
 }
 
 void Camera::arcball() {
-	float x = distance * SIN(TORAD(height)) * COS(TORAD(azimuth)) + target[0];
-	float y = distance * SIN(TORAD(height)) * SIN(TORAD(azimuth)) + target[1];
-	float z = distance * COS(TORAD(height)) + target[2];
+	float x = distance * std::sin(glm::radians(height)) * std::cos(glm::radians(azimuth)) + target[0];
+	float y = distance * std::sin(glm::radians(height)) * std::sin(glm::radians(azimuth)) + target[1];
+	float z = distance * std::cos(glm::radians(height)) + target[2];
 
 	position.x = x;
 	position.y = z;
@@ -363,7 +381,7 @@ void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& 
 	_low.x = _low.y = _low.z = std::numeric_limits<float>::infinity();
 	_up.x = _up.y = _up.z = -std::numeric_limits<float>::infinity();
 
-	_count = static_cast<float>(*reinterpret_cast<double*>(&buffer[0]));
+	_count = static_cast<uint>(*reinterpret_cast<double*>(&buffer[0]));
 	_dims[0] = static_cast<float>(*reinterpret_cast<double*>(&buffer[1 * sizeof(double)]));
 	_dims[1] = static_cast<float>(*reinterpret_cast<double*>(&buffer[2 * sizeof(double)]));
 	_dims[2] = static_cast<float>(*reinterpret_cast<double*>(&buffer[3 * sizeof(double)]));
@@ -423,7 +441,7 @@ void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& 
 
 CameraController::CameraController(Camera* _cam) : camera(_cam){}
 
-void CameraController::mbCB(int _button, int _action, int _mods) {
+void CameraController::mbCB(int _button, int _action, int /*_mods*/) {
 	mbDown = _button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS;
 }
 
@@ -437,8 +455,8 @@ void CameraController::cursorCB(double _xpos, double _ypos) {
 	if (mbDown) {
 		
 
-		float deltaX = -TORAD(((float)_xpos - oldX) * degreesPerPixel);
-		float deltaY = -TORAD(((float)_ypos - oldY) * degreesPerPixel);
+		float deltaX = -glm::radians(((float)_xpos - oldX) * degreesPerPixel);
+		float deltaY = -glm::radians(((float)_ypos - oldY) * degreesPerPixel);
 
 		//std::cout << deltaX << " " << deltaY << std::endl;
 
@@ -447,14 +465,14 @@ void CameraController::cursorCB(double _xpos, double _ypos) {
 		Vec4 res = rot * Vec4(camera->direction, 1.f);
 		camera->direction = Vec3(res[0], res[1], res[2]);
 
-		Vec3 tmp = NOR(CRS(camera->direction, camera->up));
+		Vec3 tmp = glm::normalize(glm::cross(camera->direction, camera->up));
 		//TODO FIX KAMERA GOPFERDAMMI
 		//if(std::isnan(tmp[0]) || std::isnan(tmp[1]) || std::isnan(tmp[2]))
 		//std::cout << glm::to_string(tmp) << std::endl;
 		rot = glm::identity<Mat4>();
 
 		rot = glm::rotate(glm::identity<Mat4>(), deltaY, tmp);
-		res = NOR(rot * Vec4(camera->direction, 1.f));
+		res = glm::normalize(rot * Vec4(camera->direction, 1.f));
 		camera->direction = Vec3(res[0], res[1], res[2]);
 
 		
@@ -468,19 +486,19 @@ void CameraController::cursorCB(double _xpos, double _ypos) {
 void CameraController::update(GLFWwindow* _window, float _delta) {
 
 	if (glfwGetKey(_window, GLFW_KEY_UP) == GLFW_PRESS) {
-		Vec3 delta = NOR(camera->direction) * (_delta * velocity);
+		Vec3 delta = glm::normalize(camera->direction) * (_delta * velocity);
 		camera->position += delta;
 	}
 	if (glfwGetKey(_window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-		Vec3 delta = NOR(camera->direction) * (-_delta * velocity);
+		Vec3 delta = glm::normalize(camera->direction) * (-_delta * velocity);
 		camera->position += delta;
 	}
 	if (glfwGetKey(_window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-		Vec3 delta = NOR(CRS(camera->direction, camera->up)) * (-_delta * velocity);
+		Vec3 delta = glm::normalize(glm::cross(camera->direction, camera->up)) * (-_delta * velocity);
 		camera->position += delta;
 	}
 	if (glfwGetKey(_window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-		Vec3 delta = NOR(CRS(camera->direction, camera->up)) * (_delta * velocity);
+		Vec3 delta = glm::normalize(glm::cross(camera->direction, camera->up)) * (_delta * velocity);
 		camera->position += delta;
 	}
 

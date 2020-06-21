@@ -1,5 +1,5 @@
 
-#version 460 core
+#version 430 core
 
 const float PI =  3.14159265358979323846;
 

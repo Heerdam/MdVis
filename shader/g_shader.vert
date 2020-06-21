@@ -1,4 +1,4 @@
-#version 460 core
+#version 430 core
 
 layout (location = 5) in vec3 position;
 layout (location = 6) in vec3 nrm;

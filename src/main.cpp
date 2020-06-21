@@ -11,6 +11,15 @@
 #include <functional>
 #include <array>
 
+
+
+void GLAPIENTRY MessageCallback(GLenum /*source*/, GLenum type, GLuint /*id*/, GLenum severity, GLsizei /*length*/, const GLchar* message, const void* userParam) {
+	if (type != GL_DEBUG_TYPE_ERROR) return;
+	fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+		(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+		type, severity, message);
+}
+
 struct Proxy {
 	// -------------------- File --------------------
 	std::string pathToFile;
@@ -69,25 +78,32 @@ struct Proxy {
 	std::vector<uint> sphere_indices;
 
 	// -------------------- Queue --------------------
-	std::mutex mutex, logMutex;
+	std::mutex mutex;
 	std::queue<std::function<void(Proxy*)>> asyncQueue;
 };
 
-void load(std::atomic<float>& _progress, Proxy& _proxy) {
+void load(Proxy& _proxy) {
 
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 			//COMPILE SHADERS
-			//TODO schäider für 2 cases
 			_proxy->compShader.id = "c_shader";
-			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/c_shader")).string());
+#if INTERPOLATION_TYPE == 2
+			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/c_shader_cub")).string());
+#elif INTERPOLATION_TYPE == 1
+			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/c_shader_lin")).string());
+#else
+			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/c_shader_no")).string());
+#endif
 			_proxy->geomShader.id = "g_shader";
 			_proxy->geomShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/g_shader")).string());
 			_proxy->lightShader.id = "l_shader";
 			_proxy->lightShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/l_shader")).string());
+#if WIDGET_SHOW
 			_proxy->widgetShader.id = "widget_shader";
 			_proxy->widgetShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/widget_shader")).string());
+#endif
 			_proxy->ssaoShader.id = "ssao_shader";
 			_proxy->ssaoShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/ssao_shader")).string());
 			_proxy->ssaoBlurShader.id = "ssao_blur_shader";
@@ -97,14 +113,14 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 		});
 	}
 
-	LOG("Loading file: " + _proxy.pathToFile + "\n", _proxy.logMutex);
+	Logger::LOG("Loading file: " + _proxy.pathToFile + "\n", true);
 
 	//PARSE FILE
 	FileParser::loadFile(std::filesystem::absolute(std::filesystem::path("../coords.traj")).string(), _proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
 	_proxy.TIMESTEPS = static_cast<uint>(_proxy.coords.size() / 3) / _proxy.ATOMCOUNT;
 
-	LOG("Atoms: " + std::to_string(_proxy.ATOMCOUNT) + " Steps: " + std::to_string(_proxy.TIMESTEPS) + "\n", _proxy.logMutex);
-	LOG("Bounds: [" + std::to_string(_proxy.up.x) + ", " + std::to_string(_proxy.up.y) + ", " + std::to_string(_proxy.up.z) + "]\n", _proxy.logMutex);
+	Logger::LOG("Atoms: " + std::to_string(_proxy.ATOMCOUNT) + " Steps: " + std::to_string(_proxy.TIMESTEPS) + "\n", true);
+	Logger::LOG("Bounds: [" + std::to_string(_proxy.up.x) + ", " + std::to_string(_proxy.up.y) + ", " + std::to_string(_proxy.up.z) + "]\n", true);
 
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
@@ -127,33 +143,36 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			cntr[i] = (_proxy.up[i] - _proxy.low[i]) / 2.f + _proxy.low[i];
 
 		//SET UP THE CAMERAS
-		_proxy.cam = Camera(false, _proxy.wWidth, _proxy.wHeight);
+		_proxy.cam = Camera(false, static_cast<float>(_proxy.wWidth), static_cast<float>(_proxy.wHeight));
 		_proxy.cam.fieldOfView = 50.f;
 		_proxy.cam.nearPlane = 0.01f;
 		_proxy.cam.farPlane = 100.f;
 		_proxy.cam.position = Vec3(cntr[0] + 1.2f * _proxy.dims[0], cntr[1], cntr[2]);
-		_proxy.cam.direction = NOR(cntr - _proxy.cam.position);
+		_proxy.cam.direction = glm::normalize(cntr - _proxy.cam.position);
 		_proxy.cam.up = Vec3(0.f, 1.f, 0.f);
 		_proxy.cam.update();
 
-		_proxy.widgetCam = Camera(false, 400.f, 400.f);
+#if WIDGET_SHOW
+		_proxy.widgetWidth = WIDGET_WIDTH;
+		_proxy.widgetHeight = WIDGET_HEIGHT;
+		_proxy.widgetCam = Camera(false, _proxy.widgetWidth, _proxy.widgetHeight);
 		_proxy.widgetCam.nearPlane = 1.f;
 		_proxy.widgetCam.farPlane = 50;
 		_proxy.widgetCam.position = Vec3(-50.f, 0.f, 0.f);
 		_proxy.widgetCam.direction = Vec3(1.f, 0.f, 0.f);
 		_proxy.widgetCam.up = Vec3(0.f, 1.f, 0.f);
 		_proxy.widgetCam.update();
-
+#endif
 		_proxy.controller = CameraController(&_proxy.cam);
 	}
 	
 	//CREATE SPHERE
-	const uint subdivisons = 3;
-	auto sphere = Icosahedron::create(subdivisons);
+	assert(SPHERE_SUBDIVISIONS >= 0);
+	auto sphere = Icosahedron::create(SPHERE_SUBDIVISIONS);
 	_proxy.sphere_vertices = std::get<0>(sphere);
 	auto& sphere_indices = std::get<1>(sphere);
 
-	LOG("Icosahedron loaded with " + std::to_string(subdivisons) + " subdivisons [i: " + std::to_string(sphere_indices.size()) + ", v: " + std::to_string(_proxy.sphere_vertices.size()) + "]", _proxy.logMutex);
+	Logger::LOG("Icosahedron loaded with " + std::to_string(SPHERE_SUBDIVISIONS) + " subdivisons [i: " + std::to_string(sphere_indices.size()) + ", v: " + std::to_string(_proxy.sphere_vertices.size()) + "]", true);
 
 	//MERGE INDICES OF SPHERES
 	size_t indexSize = sphere_indices.size();
@@ -168,7 +187,7 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 	_proxy.SPHEREVERTICES = _proxy.sphere_vertices.size() / _proxy.SPHEREVERTEXSIZE;
 	_proxy.INDEXCOUNT = _proxy.sphere_indices.size();
 
-	LOG("Indices merged for " + std::to_string(_proxy.ATOMCOUNT) + " atoms: " + std::to_string(_proxy.INDEXCOUNT) + "\n", _proxy.logMutex);
+	Logger::LOG("Indices merged for " + std::to_string(_proxy.ATOMCOUNT) + " atoms: " + std::to_string(_proxy.INDEXCOUNT) + "\n", true);
 
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
@@ -189,15 +208,15 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 	_proxy.auxBuffer.resize(_proxy.ATOMCOUNT * _proxy.SPHEREVERTICES * _proxy.AUXVERTEXSIZE);
 	for (uint i = 0; i < _proxy.SPHEREVERTICES; ++i) {
 		//nrm 
-		Vec3 v = NOR(Vec3(_proxy.sphere_vertices[3 * i], _proxy.sphere_vertices[3 * i + 1], _proxy.sphere_vertices[3 * i + 2]));
+		Vec3 v = glm::normalize(Vec3(_proxy.sphere_vertices[3 * i], _proxy.sphere_vertices[3 * i + 1], _proxy.sphere_vertices[3 * i + 2]));
 		std::memcpy(_proxy.auxBuffer.data() + i * _proxy.AUXVERTEXSIZE, glm::value_ptr(v), 3 * sizeof(float));
 		//t
-		Vec3 t = NOR(CRS(v, Vec3(0.f, 1.f, 0.f)));		
+		Vec3 t = glm::normalize(glm::cross(v, Vec3(0.f, 1.f, 0.f)));
 		if (std::isnan(t[0]) || std::isnan(t[1]) || std::isnan(t[2]))
-			t = NOR(CRS(v, Vec3(1.f, 0.f, 0.f)));
+			t = glm::normalize(glm::cross(v, Vec3(1.f, 0.f, 0.f)));
 		std::memcpy(_proxy.auxBuffer.data() + i * _proxy.AUXVERTEXSIZE + 3, glm::value_ptr(t), 3 * sizeof(float));
 		//bt
-		Vec3 bt = NOR(CRS(v, t));
+		Vec3 bt = glm::normalize(glm::cross(v, t));
 		std::memcpy(_proxy.auxBuffer.data() + i * _proxy.AUXVERTEXSIZE + 6, glm::value_ptr(bt), 3 * sizeof(float));
 	}
 
@@ -205,7 +224,7 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 		std::memcpy(_proxy.auxBuffer.data() + i * (_proxy.SPHEREVERTICES * _proxy.AUXVERTEXSIZE), _proxy.auxBuffer.data(), _proxy.SPHEREVERTICES * _proxy.AUXVERTEXSIZE * sizeof(float));
 	}
 
-	LOG("Normals, Tangents and Bitangents created.\n", _proxy.logMutex);
+	Logger::LOG("Normals, Tangents and Bitangents created.\n", true);
 
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
@@ -406,7 +425,7 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
 	
 			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-				LOG("Framebuffer not complete! Shutting down...", _proxy->logMutex);
+				Logger::LOG("ERROR: Framebuffer not complete! Shutting down...", true);
 				_proxy->shouldTerminate = true;
 			}
 
@@ -414,39 +433,14 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 		});
 	}
 
+#if WIDGET_SHOW
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 
-			/*
-			uint axisII[420];
-			uint axisIN[420];
-			for (uint i = 0; i < 420; ++i) {
-				axisII[i] = axisI[2*i] - 1;
-				axisIN[i] = axisI[2 * i + 1] - 1;
-			}
-
-			const uint vertexSize = 9;
-			std::vector<float> vertices(78 * vertexSize);
-			for (uint i = 0; i < 78; ++i) {
-				Vec3 col = Vec3(1.f, 0.f, 0.f);
-				//pos
-				std::memcpy(vertices.data() + vertexSize * i, &axisV[3*i], 3 * sizeof(float));
-				//nrm
-				std::memcpy(vertices.data() + vertexSize * i + 3, &axisN[3*axisIN[i]], 3 * sizeof(float));
-				std::cout << i << " ";
-				//for (uint j = 3 * axisIN[i]; j < 3 * axisIN[i] + 3; ++j)
-					//std::cout << axisN[j] << " ";
-				//std::cout << std::endl;
-				//col
-				std::memcpy(vertices.data() + vertexSize * i + 6, glm::value_ptr(col), 3 * sizeof(float));
-			}
-			*/
-
 			objl::Loader Loader;
-			if (!Loader.LoadFile("../axisnrm.obj")) {
-				std::cout << "ERROR: can't load axisnrm.obj" << std::endl;
-			}
+			if (!Loader.LoadFile("../axisnrm.obj"))
+				Logger::LOG("ERROR: can't load axisnrm.obj!", true);
 
 			const uint vertexSize = 9u;
 			objl::Mesh curMesh = Loader.LoadedMeshes[0];
@@ -495,7 +489,7 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 
 		});
 	}
-
+#endif
 	{
 		std::lock_guard<std::mutex> lock(_proxy.mutex);
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
@@ -592,7 +586,7 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
 
 			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-				LOG("Framebuffer not complete (SSAO)! Shutting down...", _proxy->logMutex);
+				Logger::LOG("ERROR: Framebuffer not complete! Shutting down...", true);
 				_proxy->shouldTerminate = true;
 			}
 
@@ -629,7 +623,7 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			
 			_proxy->isGLloaded = true;
 			_proxy->t = 0.f;
-			LOG("Loading finished\n\n", _proxy->logMutex);
+			Logger::LOG("Loading finished\n\n", true);
 		});
 	}
 	
@@ -638,50 +632,44 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 int main() {
 
 	Proxy proxy;
-	std::atomic<float> progress;
+	Logger::init();
+	Logger::LOG("Welcome to MdVis!", true);
 
 	// --------------------INITIALISE THE WINDOW, proxy, CAMERAS AND CONTEXT --------------------
 	if (!glfwInit()) {
-		LOG("GLFW not ok", proxy.logMutex);
+		Logger::LOG("Failed to init glfw. Shutting down...", true);
 		return -1;
 	}
 
-	//tschegg ob comp shader awäsend
-
-	glfwWindowHint(GLFW_REFRESH_RATE, 60);
+	glfwWindowHint(GLFW_REFRESH_RATE, 120);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_DEPTH_BITS, 24);
 	glfwWindowHint(GLFW_STENCIL_BITS, 8);
 
-	proxy.window = glfwCreateWindow(1920, 1080, "MdVis 0.2a", NULL, NULL);
+	proxy.window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "MdVis 0.3a", NULL, NULL);
 	if (!proxy.window) {
+		Logger::LOG("Failed to create window. Shutting down...", true);
 		glfwTerminate();
 		return -1;
 	}
 
-	
 	glfwMakeContextCurrent(proxy.window);
+
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+		Logger::LOG("Failed to init GLAD. Shutting down...", true);
+		return -1;
+	}
 
 	glfwGetFramebufferSize(proxy.window, &proxy.wWidth, &proxy.wHeight);
 	glViewport(0, 0, proxy.wWidth, proxy.wHeight);
 	glfwSwapInterval(0);
 
-	glewExperimental = GL_TRUE;
-	if (!glewInit() == GLEW_OK) {
-		LOG("glew not ok", proxy.logMutex);
+	if (!GL_COMPUTE_SHADER && !GL_MAX_COMPUTE_WORK_GROUP_SIZE > 1024) {
+		Logger::LOG("Compute Shader not supported. Shutting down...", true);
 		return -1;
 	}
 
-	if (!GL_COMPUTE_SHADER && GL_MAX_COMPUTE_WORK_GROUP_SIZE > 1024) {
-		LOG("Compute Shader not supported!", proxy.logMutex);
-		return -1;
-	}
-
-
-	//TODO 	LOG("Max Dispatch groups: " + std::to_string(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS) + "\n", _proxy.logMutex);
-
-	
 	glEnable(GL_STENCIL_TEST);
 	glEnable(GL_DEBUG_OUTPUT);
 	glEnable(GL_DEPTH_TEST);
@@ -691,16 +679,8 @@ int main() {
 	// -------------------- SET UP CALLBACKS --------------------
 	
 	glfwSetWindowUserPointer(proxy.window, &proxy);
-	/*
-	glfwSetFramebufferSizeCallback(window, [](GLFWwindow* _window, int _width, int _height)->void {
-		proxy* proxy = reinterpret_cast<proxy*>(glfwGetWindowUserPointer(_window));
-		glViewport(0, 0, _width, _height);
-		proxy->cam->viewportWidth = _width;
-		proxy->cam->viewportWidth = _height;
-		proxy->cam->update();
-	});
-	
-*/	glfwSetKeyCallback(proxy.window, [](GLFWwindow* _window, int _key, int _scancode, int _action, int _mods)->void {	
+
+	glfwSetKeyCallback(proxy.window, [](GLFWwindow* _window, int _key, int _scancode, int _action, int _mods)->void {	
 		Proxy* proxy = reinterpret_cast<Proxy*>(glfwGetWindowUserPointer(_window));
 		if (!proxy->isGLloaded) return;
 		if (_key == GLFW_KEY_SPACE)
@@ -741,7 +721,7 @@ int main() {
 		proxy->controller.mbCB(_button, _action, _mods);
 	});
 
-	std::thread async(&load, std::ref(progress), std::ref(proxy));
+	std::thread async(&load, std::ref(proxy));
 
 	double time = glfwGetTime();
 	unsigned long long frame = 0;
@@ -781,7 +761,7 @@ int main() {
 		if (proxy.isGLloaded) {
 
 			proxy.controller.update(proxy.window, 1.f / 60.f);
-						
+
 			// -------------------- Compute Pass --------------------
 			{
 				proxy.compShader.bind();
@@ -847,13 +827,13 @@ int main() {
 
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-			}		
+			}
 			// -------------------- Copy Depth and Stencil --------------------
 			{
 				glBindFramebuffer(GL_READ_FRAMEBUFFER, proxy.g_fb);
 				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 				glBlitFramebuffer(0, 0, proxy.wWidth, proxy.wHeight, 0, 0, proxy.wWidth, proxy.wHeight, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);			
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
 			// -------------------- SSAO --------------------
 			{
@@ -889,14 +869,14 @@ int main() {
 				glUniform1f(10, proxy.s_radius);
 				glUniform1f(11, proxy.s_bias);
 				glUniformMatrix4fv(12, 1, false, glm::value_ptr(proxy.cam.view));
-				glUniform1fv(13, 3*64, proxy.s_samples);
+				glUniform1fv(13, 3 * 64, proxy.s_samples);
 
 				glDrawElements(GL_TRIANGLES, 6u, GL_UNSIGNED_INT, (void*)0);
 
 				glBindVertexArray(0);
 				proxy.ssaoShader.unbind();
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			}			
+			}
 			// -------------------- SSAO Blur --------------------
 			{
 				glBindFramebuffer(GL_FRAMEBUFFER, proxy.ss_b_fb);
@@ -918,7 +898,6 @@ int main() {
 			}
 			// -------------------- Lightning Pass --------------------
 			{
-				
 				proxy.lightShader.bind();
 
 				glBindVertexArray(proxy.l_vao);
@@ -943,7 +922,7 @@ int main() {
 				glBindTexture(GL_TEXTURE_2D, proxy.g_col);
 				glActiveTexture(GL_TEXTURE5);
 				glBindTexture(GL_TEXTURE_2D, proxy.ss_b_tex);
-				
+
 				//uniforms
 				glUniform3fv(8, 1, glm::value_ptr(proxy.cam.position));
 				glUniform1fv(12, proxy.lights.size(), proxy.lights.data());
@@ -952,8 +931,9 @@ int main() {
 
 				glBindVertexArray(0);
 				proxy.lightShader.unbind();
-			}			
+			}
 			// -------------------- Forward Pass --------------------
+#if WIDGET_SHOW
 			{
 				glDisable(GL_STENCIL_TEST);
 				glEnable(GL_DEPTH_TEST);
@@ -964,10 +944,10 @@ int main() {
 				glBindVertexArray(proxy.widget_vao);
 				proxy.widgetShader.bind();
 
-				
+
 				Mat4 rot = glm::lookAt(proxy.cam.position, proxy.cam.position + proxy.cam.direction, proxy.cam.up);
 				proxy.widgetCam.position = rot * Vec4(-1.f, 0.f, 0.f, 1.f) * 5.f;
-				proxy.widgetCam.direction = NOR(-proxy.widgetCam.position);
+				proxy.widgetCam.direction = glm::normalize(-proxy.widgetCam.position);
 				proxy.widgetCam.update();
 
 				glUniform3fv(3, 1, glm::value_ptr(proxy.widgetCam.position));
@@ -977,19 +957,21 @@ int main() {
 
 				proxy.widgetShader.unbind();
 				glBindVertexArray(0);
+			}	
+#endif
 
-				// -------------------- SYNC --------------------
-				glClientWaitSync(sync[index], GL_SYNC_FLUSH_COMMANDS_BIT, 1000);
-				glDeleteSync(sync[index]);
-				sync[index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-				index = (index++) % 2;
-			}
+			// -------------------- SYNC --------------------
+			glClientWaitSync(sync[index], GL_SYNC_FLUSH_COMMANDS_BIT, 1000);
+			glDeleteSync(sync[index]);
+			sync[index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+			index = (index++) % 2;
 
 		// -------------------- FPS --------------------
 			frame++;
 			if (ctime - time >= 1.0) {
-				//LOG(std::to_string(proxy.t) + " " + std::to_string(frame), proxy.logMutex);
-				//std::cout << proxy.t << " " << frame << std::endl;
+#if LOG_FRAMES
+				Logger::LOG(std::to_string(proxy.t) + " " + std::to_string(frame), true);
+#endif
 				frame = 0;
 				time = ctime;
 			}
