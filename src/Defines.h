@@ -66,6 +66,9 @@ move the building of the spline onto the cpu.
 
 #define LOG_FRAMES 0
 
+#define USE_SSAO 0
+#define SSAO_KERNEL_SIZE 64
+
 /*
 Set this to "" if needed when debugging in VsCode
 */
