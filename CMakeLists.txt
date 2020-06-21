@@ -7,7 +7,7 @@ project(MdVis)
 
 add_executable(mdvis 
 	src/Defines.h 
-	src/Gl.h 
+	src/GL.h 
 	src/GL.cpp 
 	src/main.cpp 
 	src/Spline.hpp
