@@ -61,9 +61,6 @@ struct Proxy {
 	float s_samples[3*64];
 	float s_radius = 1.0f, s_bias = 0.025f;
 
-	//fxaa
-	GLuint f_fb, f_tex;
-
 	//forward pass
 	GLuint widget_vao;
 
@@ -579,8 +576,8 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			glGenTextures(1, &_proxy->s_ssao);
 			glBindTexture(GL_TEXTURE_2D, _proxy->s_ssao);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, _proxy->wWidth, _proxy->wHeight, 0, GL_RED, GL_FLOAT, NULL);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _proxy->s_ssao, 0);
@@ -610,42 +607,6 @@ void load(std::atomic<float>& _progress, Proxy& _proxy) {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _proxy->ss_b_tex, 0);
-		});
-	}
-	// -------------------- FXAA --------------------
-	if(false)
-	{
-		std::lock_guard<std::mutex> lock(_proxy.mutex);
-		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
-
-			glGenFramebuffers(1, &_proxy->f_fb);
-			glBindFramebuffer(GL_FRAMEBUFFER, _proxy->f_fb);
-
-			glGenTextures(1, &_proxy->f_tex);
-			glBindTexture(GL_TEXTURE_2D, _proxy->f_tex);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, _proxy->wWidth, _proxy->wHeight, 0, GL_RGB, GL_FLOAT, NULL);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _proxy->f_tex, 0);
-
-			GLuint attachments[1] = { GL_COLOR_ATTACHMENT0 };
-			glDrawBuffers(1, attachments);
-
-			//depth
-			glBindRenderbuffer(GL_RENDERBUFFER, _proxy->g_depth);
-			//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, _proxy->wWidth, _proxy->wHeight);
-			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
-			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _proxy->g_depth);
-
-			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-				LOG("Framebuffer not complete (FXAA)! Shutting down...", _proxy->logMutex);
-				_proxy->shouldTerminate = true;
-			}
-
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			
 		});
 	}
 	// -------------------- Finalizing --------------------
@@ -724,6 +685,7 @@ int main() {
 	glEnable(GL_STENCIL_TEST);
 	glEnable(GL_DEBUG_OUTPUT);
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_SRGB);
 	glDebugMessageCallback(MessageCallback, 0);
 
 	// -------------------- SET UP CALLBACKS --------------------
@@ -744,6 +706,7 @@ int main() {
 		if (_key == GLFW_KEY_SPACE)
 			proxy->t = 0.f;
 
+		/*
 		//radius
 		if (_key == GLFW_KEY_1) {
 			proxy->s_radius += 0.1f;
@@ -762,6 +725,8 @@ int main() {
 			proxy->s_bias -= 0.05f;
 			std::cout << proxy->s_bias << std::endl;
 		}
+		*/
+		//u_lumaThreshold
 	});
 	
 	glfwSetCursorPosCallback(proxy.window, [](GLFWwindow* _window, double _xpos, double _ypos)->void {
@@ -852,7 +817,8 @@ int main() {
 			}
 			// -------------------- Geometry Pass --------------------
 			{
-				//glEnable(GL_DEPTH_TEST);
+				glEnable(GL_DEPTH_TEST);
+				glEnable(GL_STENCIL_TEST);
 
 				glBindFramebuffer(GL_FRAMEBUFFER, proxy.g_fb);
 				glClearColor(0.5f, 0.5f, 0.5f, 1.f);
@@ -872,6 +838,10 @@ int main() {
 
 				glDrawElements(GL_TRIANGLES, proxy.INDEXCOUNT, GL_UNSIGNED_INT, (void*)0);
 
+				glStencilMask(0x00);
+				glStencilFunc(GL_EQUAL, 1, 0xFF);
+				glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
 				glBindVertexArray(0);
 				proxy.geomShader.unbind();
 
@@ -883,12 +853,12 @@ int main() {
 				glBindFramebuffer(GL_READ_FRAMEBUFFER, proxy.g_fb);
 				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 				glBlitFramebuffer(0, 0, proxy.wWidth, proxy.wHeight, 0, 0, proxy.wWidth, proxy.wHeight, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);			
 			}
 			// -------------------- SSAO --------------------
 			{
+				glDisable(GL_DEPTH_TEST);
 				glBindFramebuffer(GL_FRAMEBUFFER, proxy.s_fb);
-				glClearDepth(1.f);
 				glClearColor(0.f, 0.f, 0.f, 0.f);
 				glClear(GL_COLOR_BUFFER_BIT);
 				proxy.ssaoShader.bind();
@@ -926,10 +896,11 @@ int main() {
 				glBindVertexArray(0);
 				proxy.ssaoShader.unbind();
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			}
+			}			
 			// -------------------- SSAO Blur --------------------
 			{
 				glBindFramebuffer(GL_FRAMEBUFFER, proxy.ss_b_fb);
+				glClearColor(0.f, 0.f, 0.f, 0.f);
 				glClear(GL_COLOR_BUFFER_BIT);
 
 				proxy.ssaoBlurShader.bind();
@@ -947,9 +918,7 @@ int main() {
 			}
 			// -------------------- Lightning Pass --------------------
 			{
-				//glBindFramebuffer(GL_FRAMEBUFFER, proxy.f_fb);
-				//glClearColor(0.f, 0.f, 0.f, 0.f);
-				//glClear(GL_COLOR_BUFFER_BIT);
+				
 				proxy.lightShader.bind();
 
 				glBindVertexArray(proxy.l_vao);
@@ -979,38 +948,15 @@ int main() {
 				glUniform3fv(8, 1, glm::value_ptr(proxy.cam.position));
 				glUniform1fv(12, proxy.lights.size(), proxy.lights.data());
 
-				glStencilMask(0x00);
-				glStencilFunc(GL_EQUAL, 1, 0xFF);
-				glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
 				glDrawElements(GL_TRIANGLES, 6u, GL_UNSIGNED_INT, (void*)0);
-
-				glStencilFunc(GL_ALWAYS, 1, 0xFF);
 
 				glBindVertexArray(0);
 				proxy.lightShader.unbind();
-				//glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			}
-			// -------------------- FXAA Pass --------------------
-			if(false)
-			{
-				proxy.fxaaShader.bind();
-				glBindVertexArray(proxy.l_vao);
-
-				glUniform2f(3, 1.0f / proxy.wWidth, 1.0f / proxy.wHeight);
-
-				glUniform1i(0, 0);
-				glActiveTexture(GL_TEXTURE0);
-				glBindTexture(GL_TEXTURE_2D, proxy.f_tex);
-
-				//glDrawElements(GL_TRIANGLES, 6u, GL_UNSIGNED_INT, (void*)0);
-
-				glBindVertexArray(0);
-				proxy.fxaaShader.unbind();
-			}		
-			
+			}			
 			// -------------------- Forward Pass --------------------
 			{
+				glDisable(GL_STENCIL_TEST);
+				glEnable(GL_DEPTH_TEST);
 				glClearDepth(1.f);
 				glClear(GL_DEPTH_BUFFER_BIT);
 				glViewport(0, 0, proxy.widgetWidth, proxy.widgetHeight);

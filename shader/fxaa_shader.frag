@@ -17,8 +17,8 @@ out vec4 fragColor;
 void main() {
 
     vec3 rgbM = texture(u_colorTexture, v_texCoord).rgb;
-	fragColor = vec4(rgbM, 1.f);
-	return;
+	//fragColor = vec4(rgbM, 1.0);		
+		//return;
 	// Sampling neighbour texels. Offsets are adapted to OpenGL texture coordinates. 
 	vec3 rgbNW = textureOffset(u_colorTexture, v_texCoord, ivec2(-1, 1)).rgb;
     vec3 rgbNE = textureOffset(u_colorTexture, v_texCoord, ivec2(1, 1)).rgb;
@@ -84,5 +84,7 @@ void main() {
 		// ... no, so use four samples. 
 		fragColor = vec4(rgbFourTab, 1.0);
 	}
+
+//	fragColor.r = 1.0;
 
 }

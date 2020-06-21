@@ -3,7 +3,8 @@
 
 const float PI =  3.14159265358979323846;
 
-out vec4 fragColor;
+//out vec4 fragColor;
+ out vec4 fragColor;
   
 layout (location = 2) uniform sampler2D g_pos;
 layout (location = 3) uniform sampler2D g_nrm;
@@ -14,7 +15,7 @@ layout (location = 7) uniform sampler2D g_ssao;
 
 layout(location = 8) uniform vec3 camPos;
 
-layout (location = 9) uniform float ambiente = 0.2f;
+layout (location = 9) uniform float ambiente = 0.1f;
 
 layout (location = 10) uniform float intensity = 0.5f;
 
@@ -30,7 +31,7 @@ void main() {
     vec3 albedo = texture(g_col, uvs).rgb;
     float ao = texture(g_ssao, uvs).x;// * 2 - 1;
 
-    //fragColor = vec4(ao, ao, ao, 1.f);
+    //fragColor = vec3(ao, ao, ao);
     //return;
 
     vec3 light = vec3(1.f) * ambiente * ao;
@@ -46,8 +47,8 @@ void main() {
         light += diffuse;
     }
 
-    fragColor = vec4(light.xyz, 1.0);
-
+   fragColor = vec4(light.xyz, 1.0);
+   //fragColor = light;
 }
 
 
