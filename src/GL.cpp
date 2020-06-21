@@ -1,6 +1,8 @@
 
 #include "GL.h"
 
+#include "Spline.hpp"
+
 Logger* Logger::instance = new Logger();
 
 void Logger::init() {
@@ -505,3 +507,108 @@ void CameraController::update(GLFWwindow* _window, float _delta) {
 	camera->update();
 
 }
+
+#if !USE_SPLINE_SHADER
+void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vector<float>& _traj, std::vector<float>& _out) {
+	//cyclic boundary conditions
+	{
+		_out.resize(12 * _count * _steps);
+		const float hx = dims.x;
+		const float hy = dims.y;
+		const float hz = dims.z;
+
+		const float hx2 = hx / 2.f;
+		const float hy2 = hy / 2.f;
+		const float hz2 = hz / 2.f;
+
+		const float t = 1.f / float(_steps);
+		const float m2 = (2.f * t) / 3.;
+		const float m13 = t / 6.f;
+
+
+		for (uint idx = 0; idx < _count; ++idx) {
+
+			//remove cyclic boundary conditions
+			float osx = 0.f, osy = 0.f, osz = 0.f;
+
+			for (uint i = 1; i < _steps; ++i) {
+				const uint offsetL = 3 * idx + (i - 1) * _count * 3;
+				const uint offsetH = 3 * idx + i * _count * 3;
+
+				const float dx = _traj[offsetH] - _traj[offsetL];
+				const float dy = _traj[offsetH + 1] - _traj[offsetL + 1];
+				const float dz = _traj[offsetH + 2] - _traj[offsetL + 2];
+
+				_traj[offsetL] += osx * hx;
+				_traj[offsetL + 1] += osy * hy;
+				_traj[offsetL + 2] += osz * hz;
+
+				osx += dx >= hx2 ? -1.f : dx <= -hx2 ? 1.f : 0.f;
+				osy += dy >= hy2 ? -1.f : dy <= -hy2 ? 1.f : 0.f;
+				osz += dz >= hz2 ? -1.f : dz <= -hz2 ? 1.f : 0.f;
+			}
+
+			std::vector<float> tmp(1024);
+			std::vector<float> x(1024);
+
+			//dims
+			for (uint k = 0; k < 3; ++k) {
+
+				//rhs
+				for (uint i = 1; i < _steps - 1; ++i) {
+
+					const uint offsetL = 3 * idx + (i - 1) * _count * 3 + k;
+					const uint offsetM = 3 * idx + i * _count * 3 + k;
+					const uint offsetH = 3 * idx + (i + 1) * _count * 3 + k;
+
+					x[i] = (_traj[offsetH] - _traj[offsetM]) / t - (_traj[offsetM] - _traj[offsetL]) / t;
+					tmp[i] = 0.f;
+				}
+
+				//boundary conditions
+				x[0] = 3.f * ((_traj[3 * idx + _count * 3 + k] - _traj[3 * idx + k]) / t - 0.f);
+				x[_steps - 1] = 3.0 * (0.f - (_traj[3 * idx + (_steps - 1) * _count * 3 + k] - _traj[3 * idx + (_steps - 2) * _count * 3 + k]) / t);
+
+				//solve
+				tmp[0] = m13 / m2;
+				x[0] = x[0] / m2;
+
+				for (uint i = 1; i < _steps; ++i) {
+					const float m = 1.f / (m2 - m13 * tmp[i - 1]);
+					tmp[i] = m13 * m;
+					x[i] = (x[i] - m13 * x[i - 1]) * m;
+				}
+
+				for (uint i = _steps - 2; i > 0; --i)
+					x[i] -= tmp[i] * x[i + 1];
+				x[0] -= tmp[0] * x[1];
+
+				if (idx == 0) {
+					for (uint i = 0; i < _steps; ++i)
+						_out[i] = x[i];
+				}
+
+				//calc weights
+				for (uint i = 1; i < _steps; ++i) {
+
+					const uint offsetL = 3 * idx + (i - 1) * _count * 3 + k;
+					const uint offsetM = 3 * idx + i * _count * 3 + k;
+
+					const uint offset = 12 * idx + (i - 1) * _count * 12 + k;
+
+					_out[offset] = _traj[offsetL];
+					_out[offset + 3] = (_traj[offsetM] - _traj[offsetL]) / t - (t * (2 * x[i - 1] + x[i])) / 6.f;
+					_out[offset + 6] = x[i - 1] / 2.f;
+					_out[offset + 9] = (x[i] - x[i - 1]) / (6 * t);
+
+				}
+
+			}
+		}
+
+	}
+
+}
+#endif // USE_SPLINE_SHADER
+
+

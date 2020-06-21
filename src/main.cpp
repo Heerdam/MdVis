@@ -74,7 +74,7 @@ struct Proxy {
 	GLuint widget_vao;
 
 	// -------------------- Data --------------------
-	std::vector<float> coords, newTraj, sphere_vertices, auxBuffer;
+	std::vector<float> coords, weights, sphere_vertices, auxBuffer;
 	std::vector<uint> sphere_indices;
 
 	// -------------------- Queue --------------------
@@ -90,33 +90,31 @@ void load(Proxy& _proxy) {
 			//COMPILE SHADERS
 			_proxy->compShader.id = "c_shader";
 #if INTERPOLATION_TYPE == 2
-			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/c_shader_cub")).string());
+			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "shader/c_shader_cub")).string());
 #elif INTERPOLATION_TYPE == 1
-			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/c_shader_lin")).string());
+			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "shader/c_shader_lin")).string());
 #else
-			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/c_shader_no")).string());
+			_proxy->compShader.compileFromFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "shader/c_shader_no")).string());
 #endif
 			_proxy->geomShader.id = "g_shader";
-			_proxy->geomShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/g_shader")).string());
+			_proxy->geomShader.compileFromFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "shader/g_shader")).string());
 			_proxy->lightShader.id = "l_shader";
-			_proxy->lightShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/l_shader")).string());
+			_proxy->lightShader.compileFromFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "shader/l_shader")).string());
 #if WIDGET_SHOW
 			_proxy->widgetShader.id = "widget_shader";
-			_proxy->widgetShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/widget_shader")).string());
+			_proxy->widgetShader.compileFromFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "shader/widget_shader")).string());
 #endif
 			_proxy->ssaoShader.id = "ssao_shader";
-			_proxy->ssaoShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/ssao_shader")).string());
+			_proxy->ssaoShader.compileFromFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "shader/ssao_shader")).string());
 			_proxy->ssaoBlurShader.id = "ssao_blur_shader";
-			_proxy->ssaoBlurShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/ssao_blur_shader")).string());
-			_proxy->fxaaShader.id = "fxaa_shader";
-			_proxy->fxaaShader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/fxaa_shader")).string());
+			_proxy->ssaoBlurShader.compileFromFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "shader/ssao_blur_shader")).string());
 		});
 	}
 
 	Logger::LOG("Loading file: " + _proxy.pathToFile + "\n", true);
 
 	//PARSE FILE
-	FileParser::loadFile(std::filesystem::absolute(std::filesystem::path("../coords.traj")).string(), _proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
+	FileParser::loadFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "coords.traj")).string(), _proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
 	_proxy.TIMESTEPS = static_cast<uint>(_proxy.coords.size() / 3) / _proxy.ATOMCOUNT;
 
 	Logger::LOG("Atoms: " + std::to_string(_proxy.ATOMCOUNT) + " Steps: " + std::to_string(_proxy.TIMESTEPS) + "\n", true);
@@ -238,18 +236,19 @@ void load(Proxy& _proxy) {
 
 	if (_proxy.TIMESTEPS > 1) {
 
+#if USE_SPLINE_SHADER
 		{
 			std::lock_guard<std::mutex> lock(_proxy.mutex);
 			_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 				//return;
 				glGenBuffers(1, &_proxy->c_ssbo_weights);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_weights);
-				glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->ATOMCOUNT*12*sizeof(float)*_proxy->TIMESTEPS, nullptr, GL_STATIC_DRAW);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->ATOMCOUNT * 12 * sizeof(float) * _proxy->TIMESTEPS, nullptr, GL_STATIC_DRAW);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 				ShaderProgram shader;
 				shader.id = "t_shader";
-				shader.compileFromFile(std::filesystem::absolute(std::filesystem::path("../shader/t_shader")).string());
+				shader.compileFromFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "shader/t_shader")).string());
 				shader.bind();
 
 				//buffers
@@ -257,15 +256,15 @@ void load(Proxy& _proxy) {
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _proxy->c_ssbo_weights);
 
 				//uniforms
-				glUniform1ui(1, _proxy->ATOMCOUNT);
-				glUniform1ui(2, _proxy->TIMESTEPS);
+				glUniform1i(1, _proxy->ATOMCOUNT);
+				glUniform1i(2, _proxy->TIMESTEPS);
 				glUniform3fv(3, 1, glm::value_ptr(_proxy->dims));
 
 				glDispatchCompute(_proxy->ATOMCOUNT, 1, 1);
 
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
-
+				//TODO delete traj
 				shader.unbind();
 
 				glMemoryBarrier(GL_ALL_BARRIER_BITS);
@@ -277,7 +276,7 @@ void load(Proxy& _proxy) {
 
 				for (uint i = 0; i < _proxy->ATOMCOUNT * 4 * sizeof(float) * _proxy->TIMESTEPS; i+=4) {
 					std::cout << i << " " << data[i] << " " << data[i+1] << " " << data[i+2] << " " << data[i+3] << std::endl;
-						
+
 				}
 				*/
 
@@ -288,9 +287,24 @@ void load(Proxy& _proxy) {
 				//	}
 				//}
 
-				
+
 			});
 		}
+#else
+		{
+			SplineBuilder::build(_proxy.ATOMCOUNT, _proxy.TIMESTEPS, _proxy.dims, _proxy.coords, _proxy.weights);
+			{
+				std::lock_guard<std::mutex> lock(_proxy.mutex);
+				_proxy.asyncQueue.push([](Proxy* _proxy)->void {
+					glGenBuffers(1, &_proxy->c_ssbo_weights);
+					glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_weights);
+					glBufferData(GL_SHADER_STORAGE_BUFFER, static_cast<uint>(_proxy->weights.size()) * sizeof(float), _proxy->weights.data(), GL_STATIC_DRAW);
+					glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+				});
+			}
+
+		}
+#endif // USE_SPLINE_SHADER
 	}
 
 	//Lights
@@ -620,6 +634,9 @@ void load(Proxy& _proxy) {
 
 			_proxy->auxBuffer.clear();
 			_proxy->auxBuffer.shrink_to_fit();
+
+			_proxy->weights.clear();
+			_proxy->weights.shrink_to_fit();
 			
 			_proxy->isGLloaded = true;
 			_proxy->t = 0.f;
@@ -775,10 +792,10 @@ int main() {
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, proxy.c_ssbo_traj);
 
 				//uniforms
-				glUniform1ui(1, proxy.ATOMCOUNT);
+				glUniform1i(1, proxy.ATOMCOUNT);
 				glUniform1i(2, proxy.TIMESTEPS);
 				glUniform1f(3, proxy.t);
-				glUniform1ui(4, proxy.SPHEREVERTICES);
+				glUniform1i(4, proxy.SPHEREVERTICES);
 				glUniform1f(5, 0.05f);
 				glUniform4f(6, 0.75f, 0.5f, 0.4f, 1.f);
 				glUniform1f(7, 1.f / proxy.TIMESTEPS);

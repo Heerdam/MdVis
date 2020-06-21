@@ -120,3 +120,8 @@ public:
 	static Logger* get();
 };
 
+#if !USE_SPLINE_SHADER 
+struct SplineBuilder {
+	static void build(uint _count, uint _steps, const Vec3& dims, std::vector<float>& _traj, std::vector<float>& _out);
+};
+#endif // USE_SPLINE_SHADER

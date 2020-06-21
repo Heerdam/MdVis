@@ -49,6 +49,12 @@
 #define INTERPOLATION_TYPE 2
 
 /*
+Set this to 0 when using the cubic spline interpolation but it gets stuck. Setting this to 0 will
+move the building of the spline onto the cpu.
+*/
+#define USE_SPLINE_SHADER 1
+
+/*
 	Defines how many times the icosahedron gets subdivided. More subdivison means smoother surface
 	but more vertices to draw. High impact on performance.
 	Valid range: [0,n)
@@ -56,12 +62,14 @@
 */
 #define SPHERE_SUBDIVISIONS 2
 
-#define WIDGET_SHOW 1
+#define WIDGET_SHOW 0
 
 #define LOG_FRAMES 0
 
-
-
+/*
+Set this to "" if needed when debugging in VsCode
+*/
+const std::string VSC_WORKDIR_OFFSET = "../";
 
 typedef unsigned int uint;
 typedef unsigned short ushort;
