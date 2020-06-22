@@ -65,7 +65,7 @@
 	Valid range: [0,n)
 	Default and recommended: 2
 */
-#define SPHERE_SUBDIVISIONS 2
+#define SPHERE_SUBDIVISIONS 3
 
 /*
 	Toggles the axis widget.
