@@ -1,2 +1,24 @@
+
+
 # MdVis
-brucht glew-2.1.0, glfw-3.3.2 und glm-0.9.9.8 zum kompiliere
+
+MdVis is a high performance visualizer for trajectory files written in c++ and opengl. Namely output from MdAtom.
+
+## Building
+Clone the repository with git clone git@github.com:Heerdam/MdVis.git.
+
+Important:
+MdVis needs c++17 standart. Make sure that at least gcc 9 is installed. Furthermore, **your gpu must support opengl 4.3!**
+
+### GNU/ Linux
+In the root directory simply enter
+````
+mkdir bin
+cd bin
+cmake ..'
+````
+### Windows
+Run the Cmake gui to creat the .sln file. In Visual Studio set MdVis as startup project and build/run it.
+
+## Using MdVis and Features
+Coming soon...
