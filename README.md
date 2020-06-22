@@ -22,3 +22,7 @@ Run the Cmake gui to creat the .sln file. In Visual Studio set MdVis as startup 
 
 ## Using MdVis and Features
 Coming soon...
+
+## Trajectory Specifications
+
+### Setting up MdAtom
