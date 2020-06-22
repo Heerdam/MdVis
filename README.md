@@ -13,12 +13,16 @@ Important:
 MdVis needs c++17 standart. Make sure that at least gcc 9 is installed. Furthermore, **your gpu must support opengl 4.3!**
 
 ### GNU/ Linux
-In the root directory simply enter
+Build and run MdVis as following:
 ````
 mkdir bin
 cd bin
 cmake ..
+make -j4
+./mdatom -path
 ````
+path is either a valid path to a .traj file or nothing to show the demo.traj file
+
 ### Windows
 Run the Cmake gui to creat the .sln file. In Visual Studio set MdVis as startup project and build/run it.
 
