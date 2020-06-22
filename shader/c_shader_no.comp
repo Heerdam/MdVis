@@ -35,26 +35,21 @@ layout(std430, binding = 4) readonly buffer weights {
 
 void main() {
 
-	const int currentStepLow = int(float(maxSteps) * t) % maxSteps;
-	const int currentStepUp = (int(float(maxSteps) * t) + 1) % maxSteps;
-	const int offsetLow = int(currentStepLow) * int(atomCount) * 3;
-	const int offsetUp = int(currentStepUp) * int(atomCount) * 3;
-	const uint index = gl_GlobalInvocationID.x;
-	const int vertexSize = 3;
-	const uint verIndex = index * sphere_vertices * vertexSize;
-
-	const float h = t - currentStepLow*frac;
-	const float T = h / frac;
+	const int currentStep = int(float(maxSteps) * t) % maxSteps;
+	const int index = int(gl_GlobalInvocationID.x);
+	//traj offset
+	const int offset_t = 3 * index + currentStep * atomCount * 3;
+	//offset to the sphere we are currently building
+	const uint verIndex = index * sphere_vertices * 3;
 
 	//build spheres at given centre
-	const vec3 cntrLow = vec3(traj_data[offsetLow + 3*index], traj_data[offsetLow + 3*index + 1], traj_data[offsetLow + 3*index + 2]);
-	const vec3 cntrHigh = vec3(traj_data[offsetUp + 3*index], traj_data[offsetUp + 3*index + 1], traj_data[offsetUp + 3*index + 2]);
+	const vec3 cntr = vec3(traj_data[offset_t], traj_data[offset_t + 1], traj_data[offset_t + 2]);
 
-	for(int i = 0; i < sphere_vertices; ++i) {		
+	for(int i = 0; i < sphere_vertices; ++i) {	
 		//pos
-		ver_data[verIndex + i*vertexSize] = mix(cntrLow.x, cntrHigh.x, T) + sphere_data[3*i] * radius;
-		ver_data[verIndex + i*vertexSize + 1] = mix(cntrLow.y, cntrHigh.y, T) + sphere_data[3*i+1] * radius;
-		ver_data[verIndex + i*vertexSize + 2] = mix(cntrLow.z, cntrHigh.z, T) + sphere_data[3*i+2] * radius;		
+		ver_data[verIndex + 3*i] = cntr.x + sphere_data[3*i] * radius;
+		ver_data[verIndex + 3*i + 1] = cntr.y + sphere_data[3*i+1] * radius;
+		ver_data[verIndex + 3*i + 2] = cntr.z + sphere_data[3*i+2] * radius;		
 	}
 	
 }

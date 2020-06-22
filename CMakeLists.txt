@@ -21,6 +21,8 @@ add_executable(mdvis
 	src/Spline.hpp
 	src/xoshiro.h
 	src/OBJ_Loader.h
+	src/lodepng.h
+	src/lodepng.cpp
 )
 
 set(GLAD_API "gl=4.3" CACHE STRING "API type/version pairs, like \"gl=4.6,gles=\", no version means latest")

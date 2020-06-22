@@ -12,9 +12,9 @@ void Logger::init() {
 void Logger::LOG(const std::string& _string, bool _ts) {
 	std::lock_guard<std::mutex>(get()->mutex);
 	std::chrono::duration<float> elapsed = std::chrono::high_resolution_clock::now() - get()->start;
-	float ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+	float ms = static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
 	float s = ms / 1000.f;
-	std::cout << (_ts ? "[" + std::to_string(s) + "s]" : "\t") << "\t" << _string << std::endl;
+	std::cout << (_ts ? " [" + std::to_string(s) + "s]" : "\t") << "\t" << _string << std::endl;
 };
 
 Logger* Logger::get() {
@@ -34,9 +34,9 @@ void ShaderProgram::print(std::string _id, ShaderProgram::Status _compComp, Shad
 	Logger::LOG("  Linking: " + std::string(_link == Status::failed ? "Failed!" : _link == Status::success ? "Success!" : " - "), false);
 
 	if (!_errorLog.empty()) {
-		Logger::LOG(std::string(_errorLog) + "\n", false);
+		Logger::LOG(std::string(_errorLog) + "", false);
 	} else
-		Logger::LOG("\n", false);
+		Logger::LOG("", false);
 
 }
 
@@ -236,7 +236,7 @@ void ShaderProgram::unbind() {
 	glUseProgram(0);
 }
 
-Camera::Camera(bool _isOrtho, const float _viewportWidth, const float _viewportHeight) :viewportWidth(_viewportWidth), viewportHeight(_viewportHeight) {
+Camera::Camera(bool /*_isOrtho*/, const float _viewportWidth, const float _viewportHeight) :viewportWidth(_viewportWidth), viewportHeight(_viewportHeight) {
 	direction = UVZ;
 	up = UVY;
 	normalizeUp();
@@ -246,9 +246,9 @@ void Camera::update() {
 	normalizeUp();
 
 	float aspect = viewportWidth / viewportHeight;
-	//if(isOrtho)
-		//projection = ORTHO(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, ABS(nearPlane), ABS(farPlane));
-	//else
+	if(isOrtho)
+		projection = glm::ortho(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, abs(nearPlane), abs(farPlane));
+	else
 	projection = glm::perspective(glm::radians(fieldOfView), aspect, std::abs(nearPlane), std::abs(farPlane));
 	view = glm::lookAt(position, position + direction, up);
 	combined = projection * view;
@@ -375,7 +375,7 @@ std::pair<std::vector<float>, std::vector<uint>> Icosahedron::create(uint _subdi
 	return{ v_out, i_out };
 }
 
-#ifdef USE_BINARY
+#if USE_BINARY
 void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
 	std::ifstream in(_path, std::ios::binary | std::ios::in);
 	std::vector<char> buffer(std::istreambuf_iterator<char>(in), {});
@@ -388,10 +388,10 @@ void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& 
 	_dims[1] = static_cast<float>(*reinterpret_cast<double*>(&buffer[2 * sizeof(double)]));
 	_dims[2] = static_cast<float>(*reinterpret_cast<double*>(&buffer[3 * sizeof(double)]));
 
-	for (size_t i = 0; i < _coords.size(); i+=3) {
-		float x = static_cast<float>(*reinterpret_cast<double*>(&buffer[(i+4) * sizeof(double)]));
-		float y = static_cast<float>(*reinterpret_cast<double*>(&buffer[(i+5) * sizeof(double)]));
-		float z = static_cast<float>(*reinterpret_cast<double*>(&buffer[(i+6) * sizeof(double)]));
+	for (size_t i = 0, j = 4; i < _coords.size(); i+=3, j+=3) {
+		float x = static_cast<float>(*reinterpret_cast<double*>(&buffer[j * sizeof(double)]));
+		float y = static_cast<float>(*reinterpret_cast<double*>(&buffer[(j+1) * sizeof(double)]));
+		float z = static_cast<float>(*reinterpret_cast<double*>(&buffer[(j+2) * sizeof(double)]));
 
 		_coords[i] = x;
 		_coords[i+1] = y;

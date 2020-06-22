@@ -17,12 +17,13 @@ layout(location = 9) uniform vec2 bounds;
 layout(location = 10) uniform float radius = 1.f;
 layout(location = 11) uniform float bias = 0.025;
 layout (location = 12) uniform mat4 view;
-layout(location = 13) uniform float samples[3*64];
+layout (location = 13) uniform int kernelSize = 64;
+
+layout(std430, binding = 1) buffer sb {
+	float samples[];
+};
 
 in vec2 uvs;
-
-const int kernelSize = 64;
-
 
 void main() {
 
