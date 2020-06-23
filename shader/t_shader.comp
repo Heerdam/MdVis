@@ -17,12 +17,15 @@ layout(std430, binding = 2) coherent buffer weights {
 	float w_data[]; //12 * steps * atoms
 };
 
-float tmp[1024]; //max size
-float x[1024]; //solution vector
+layout(std430, binding = 3) coherent buffer tmp {
+	float data[]; // x + tmp
+};
 
 void main() {
 	
 	const uint idx = gl_GlobalInvocationID.x;
+	const uint offset_X = idx *  steps * 2;
+	const uint offset_Tmp = idx *  steps * 2 + steps;
 
 	const float hx = dims.x;
 	const float hy = dims.y;
@@ -34,8 +37,7 @@ void main() {
 
 	float osx = 0.f, osy = 0.f, osz = 0.f;
 	
-	//remove cyclic boundary conditions
-	
+	//remove cyclic boundary conditions	
 	for(uint i = 1; i < steps; ++i) {
 		const uint offsetL = 3*idx + (i-1)*atomCount*3;
 		const uint offsetH = 3*idx + i*atomCount*3;
@@ -69,32 +71,26 @@ void main() {
 			const uint offsetM = 3*idx + i*atomCount*3 + k;
 			const uint offsetH = 3*idx + (i+1)*atomCount*3 + k;
 
-			x[i] = (traj_data[offsetH] - traj_data[offsetM]) / t - (traj_data[offsetM] - traj_data[offsetL]) / t;
-			tmp[i] = 0.f;
+			data[offset_X + i] = (traj_data[offsetH] - traj_data[offsetM]) / t - (traj_data[offsetM] - traj_data[offsetL]) / t;
+			data[offset_Tmp+i] = 0.f;
 		}
 
 		//boundary conditions
-		x[0] = 3.f * ((traj_data[3*idx + atomCount*3 + k] - traj_data[3*idx + k]) / t - 0.f);
-		x[steps-1] = 3.0 * (0.f - (traj_data[3*idx + (steps-1)*atomCount*3 + k] - traj_data[3*idx + (steps-2)*atomCount*3 + k]) / t);
-
+		data[offset_X] = 3.f * ((traj_data[3*idx + atomCount*3 + k] - traj_data[3*idx + k]) / t - 0.f);
+		data[offset_X + steps-1] = 3.0 * (0.f - (traj_data[3*idx + (steps-1)*atomCount*3 + k] - traj_data[3*idx + (steps-2)*atomCount*3 + k]) / t);
 		//solve
-		tmp[0] = m13 / m2;
-		x[0] = x[0] / m2;
+		data[offset_Tmp] = m13 / m2;
+		data[offset_X] = data[offset_X] / m2;
 
 		for (uint i = 1; i < steps; ++i) {
-			const float m = 1.f / (m2 - m13 * tmp[i-1]);
-			tmp[i] = m13 * m;
-			x[i] = (x[i] - m13 * x[i - 1]) * m;
+			const float m = 1.f / (m2 - m13 * data[i-1]);
+			data[offset_Tmp+i] = m13 * m;
+			data[offset_X+i] = (data[offset_X+i] - m13 * data[offset_X+i - 1]) * m;
 		}
 
 		for (uint i = steps - 2; i > 0; --i)
-			x[i] -= tmp[i] * x[i + 1];
-		x[0] -= tmp[0] * x[1];
-
-		if(idx == 0){
-			for(uint i = 0; i < steps; ++i)
-				w_data[i] = x[i];
-		}
+			data[offset_X + i] -= data[offset_Tmp+i] * data[offset_X+i + 1];
+		data[offset_X] -= data[offset_Tmp] * data[offset_X+1];
 
 		//calc weights
 		for(uint i = 1; i < steps; ++i){
@@ -105,10 +101,9 @@ void main() {
 			const uint offset = 12*idx + (i-1)*atomCount*12 + k;
 
 			w_data[offset] = traj_data[offsetL];
-			w_data[offset + 3] = (traj_data[offsetM] - traj_data[offsetL]) / t - (t*(2*x[i-1] + x[i]))/6.f;
-			w_data[offset + 6] = x[i-1]/2.f;
-			w_data[offset + 9] = (x[i] - x[i-1])/(6*t);
-
+			w_data[offset + 3] = (traj_data[offsetM] - traj_data[offsetL]) / t - (t*(2*data[offset_X+i-1] + data[offset_X+i]))/6.f;
+			w_data[offset + 6] = data[offset_X+i-1]/2.f;
+			w_data[offset + 9] = (data[offset_X+i] - data[offset_X+i-1])/(6*t);
 		}
 
 	}

@@ -508,7 +508,7 @@ void CameraController::update(GLFWwindow* _window, float _delta) {
 
 }
 
-#if !USE_SPLINE_SHADER
+#if USE_SPLINE_SHADER
 void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vector<float>& _traj, std::vector<float>& _out) {
 	//cyclic boundary conditions
 	{
@@ -548,8 +548,10 @@ void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vecto
 				osz += dz >= hz2 ? -1.f : dz <= -hz2 ? 1.f : 0.f;
 			}
 
-			std::vector<float> tmp(1024);
-			std::vector<float> x(1024);
+			//std::cout << osx << " " << osy << " " << osz << std::endl;
+
+			std::vector<float> tmp(_steps);
+			std::vector<float> x(_steps);
 
 			//dims
 			for (uint k = 0; k < 3; ++k) {
@@ -583,11 +585,6 @@ void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vecto
 					x[i] -= tmp[i] * x[i + 1];
 				x[0] -= tmp[0] * x[1];
 
-				if (idx == 0) {
-					for (uint i = 0; i < _steps; ++i)
-						_out[i] = x[i];
-				}
-
 				//calc weights
 				for (uint i = 1; i < _steps; ++i) {
 
@@ -605,7 +602,7 @@ void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vecto
 
 			}
 		}
-
+		
 	}
 
 }

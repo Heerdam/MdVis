@@ -44,12 +44,19 @@
 #define WINDOW_HEIGHT 1080
 
 /*
+	Toggle this if the cyclic boundary conditions should be enforced (only valid for cubic splines)
+	Valid values:	0, 1
+	Default:		1
+*/
+#define ENFORCE_CYCLIC_BOUNDARIES = 0
+
+/*
 	0 - no interpolation
 	1 - linear interpoltation
 	2 - cubic spline interpolation
 	Default:		2
 */
-#define INTERPOLATION_TYPE 0
+#define INTERPOLATION_TYPE 2
 
 /*
 	Set this to 0 when using the cubic spline interpolation but it gets stuck. Setting this to 0 will
@@ -82,7 +89,7 @@
 	Valid values:	0, 1
 	Default:		1
 */
-#define LOG_FRAMES 1
+#define LOG_FRAMES 0
 
 /*
 	Enables/ Disables SSAO (Screen Space Ambient Occlusion). Disabling it will increase performance.

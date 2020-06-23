@@ -125,13 +125,14 @@ void load(Proxy& _proxy) {
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 			glGenBuffers(1, &_proxy->c_ssbo_traj);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_traj);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->coords.size() * sizeof(float), _proxy->coords.data(), GL_DYNAMIC_DRAW);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->coords.size() * sizeof(float), _proxy->coords.data(), GL_STATIC_DRAW);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 			glGenBuffers(1, &_proxy->cg_vbo);
 			glBindBuffer(GL_ARRAY_BUFFER, _proxy->cg_vbo);
-			glBufferData(GL_ARRAY_BUFFER, _proxy->ATOMCOUNT * _proxy->VERTEXSIZE * _proxy->SPHEREVERTICES * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+			glBufferData(GL_ARRAY_BUFFER, _proxy->ATOMCOUNT * _proxy->VERTEXSIZE * _proxy->SPHEREVERTICES * sizeof(float), nullptr, GL_STATIC_DRAW);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		});
 	}
 
@@ -206,6 +207,7 @@ void load(Proxy& _proxy) {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _proxy->g_ebo);
 			glBufferData(GL_ELEMENT_ARRAY_BUFFER, _proxy->INDEXCOUNT * sizeof(uint), _proxy->sphere_indices.data(), GL_STATIC_DRAW);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		});
 	}
 
@@ -238,6 +240,7 @@ void load(Proxy& _proxy) {
 			glBindBuffer(GL_ARRAY_BUFFER, _proxy->g_vbo_aux);
 			glBufferData(GL_ARRAY_BUFFER, _proxy->auxBuffer.size() * sizeof(float), _proxy->auxBuffer.data(), GL_STATIC_DRAW);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		});
 	}
 
@@ -247,10 +250,22 @@ void load(Proxy& _proxy) {
 		{
 			std::lock_guard<std::mutex> lock(_proxy.mutex);
 			_proxy.asyncQueue.push([](Proxy* _proxy)->void {
+
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
+
+				
+
+				
 				//return;
 				glGenBuffers(1, &_proxy->c_ssbo_weights);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_weights);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->ATOMCOUNT * 12 * sizeof(float) * _proxy->TIMESTEPS, nullptr, GL_STATIC_DRAW);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+				GLuint tmp;
+				glGenBuffers(1, &tmp);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, tmp);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->ATOMCOUNT * _proxy->TIMESTEPS * 2 * sizeof(float), nullptr, GL_STATIC_DRAW);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 				ShaderProgram shader;
@@ -261,6 +276,7 @@ void load(Proxy& _proxy) {
 				//buffers
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, _proxy->c_ssbo_traj);
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, _proxy->c_ssbo_weights);
+				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, tmp);
 
 				//uniforms
 				glUniform1i(1, _proxy->ATOMCOUNT);
@@ -274,8 +290,36 @@ void load(Proxy& _proxy) {
 				//TODO delete traj
 				shader.unbind();
 
+				glDeleteBuffers(1, &tmp);
+
 				glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 				Logger::LOG("LOG:\tSpline interpolated.\n", true);
+
+				/*
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_traj);
+				float* data = new float[_proxy->ATOMCOUNT * 3 * sizeof(float) * _proxy->TIMESTEPS];
+				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, _proxy->ATOMCOUNT * 3 * sizeof(float) * _proxy->TIMESTEPS, data);
+
+				std::ofstream out("diff.txt");
+				for (uint i = 0; i < _proxy->ATOMCOUNT * 3 * _proxy->TIMESTEPS; i++) {
+					out << data[i] << std::endl;
+					if (i % 3 == 2) out << std::endl;
+				}
+				*/
+				/*
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_weights);
+				float* data = new float[_proxy->ATOMCOUNT * 12 * sizeof(float) * _proxy->TIMESTEPS];
+				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, _proxy->ATOMCOUNT * 12 * sizeof(float) * _proxy->TIMESTEPS, data);
+				
+				
+				//SplineBuilder::build(_proxy->ATOMCOUNT, _proxy->TIMESTEPS, _proxy->dims, _proxy->coords, _proxy->weights);
+
+				std::ofstream out("diff.txt");
+				for (uint i = 0; i < _proxy->ATOMCOUNT * 12 * _proxy->TIMESTEPS; i++) {
+					out << data[i] << std::endl;
+					if (i % 12 == 11) out << std::endl;
+				}
+				*/
 			});
 		}
 #elif INTERPOLATION_TYPE == 2
@@ -358,6 +402,8 @@ void load(Proxy& _proxy) {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _proxy->g_ebo);
 
 			glBindVertexArray(0);
+
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		});
 	}
 
@@ -433,6 +479,8 @@ void load(Proxy& _proxy) {
 			}
 
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		});
 	}
 
@@ -529,6 +577,8 @@ void load(Proxy& _proxy) {
 			glEnableVertexAttribArray(1);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 			glBindVertexArray(0);
+
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		});
 	}
 	// -------------------- SSAO --------------------
@@ -610,6 +660,8 @@ void load(Proxy& _proxy) {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _proxy->ss_b_tex, 0);
+
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		});
 	}
 #endif
@@ -794,10 +846,12 @@ int main() {
 			{
 				proxy.compShader.bind();
 
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
+
 				//buffers
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, proxy.c_ssbo_sphere);
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, proxy.cg_vbo);
-#if INTERPOLATION_TYPE == 2
+#if INTERPOLATION_TYPE != 3
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, proxy.c_ssbo_weights);
 #endif
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, proxy.c_ssbo_traj);
@@ -820,7 +874,8 @@ int main() {
 
 				proxy.compShader.unbind();
 
-				glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+				//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
 			}
 			// -------------------- Geometry Pass --------------------
 			{
@@ -854,6 +909,7 @@ int main() {
 
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				glDisable(GL_DEPTH_TEST);
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
 			}
 			// -------------------- Copy Depth and Stencil --------------------
 			{
@@ -861,6 +917,7 @@ int main() {
 				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 				glBlitFramebuffer(0, 0, proxy.wWidth, proxy.wHeight, 0, 0, proxy.wWidth, proxy.wHeight, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
 			}
 			// -------------------- SSAO --------------------
 #if USE_SSAO
@@ -906,6 +963,7 @@ int main() {
 				proxy.ssaoShader.unbind();
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
 			}
 			// -------------------- SSAO Blur --------------------
 			{
@@ -925,6 +983,7 @@ int main() {
 				proxy.ssaoBlurShader.unbind();
 
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
 			}
 #endif
 			// -------------------- Lightning Pass --------------------
@@ -966,6 +1025,7 @@ int main() {
 
 				glBindVertexArray(0);
 				proxy.lightShader.unbind();
+				glMemoryBarrier(GL_ALL_BARRIER_BITS);
 			}
 			// -------------------- Forward Pass --------------------
 #if WIDGET_SHOW
