@@ -378,8 +378,7 @@ std::pair<std::vector<float>, std::vector<uint>> Icosahedron::create(uint _subdi
 #if USE_BINARY
 void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
 	std::ifstream in(_path, std::ios::binary | std::ios::in);
-	std::vector<char> buffer(std::istreambuf_iterator<char>(in), {});
-	_coords.resize(buffer.size() / sizeof(double)-4);
+	std::vector<char> buffer(std::istreambuf_iterator<char>(in), {});	
 	_low.x = _low.y = _low.z = std::numeric_limits<float>::infinity();
 	_up.x = _up.y = _up.z = -std::numeric_limits<float>::infinity();
 
@@ -388,7 +387,10 @@ void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& 
 	_dims[1] = static_cast<float>(*reinterpret_cast<double*>(&buffer[2 * sizeof(double)]));
 	_dims[2] = static_cast<float>(*reinterpret_cast<double*>(&buffer[3 * sizeof(double)]));
 
-	for (size_t i = 0, j = 4; i < _coords.size(); i+=3, j+=3) {
+	const uint c = buffer.size() / sizeof(double) - 4;
+	_coords.resize(c + _count*3);
+
+	for (size_t i = 0, j = 4; i < c; i+=3, j+=3) {
 		float x = static_cast<float>(*reinterpret_cast<double*>(&buffer[j * sizeof(double)]));
 		float y = static_cast<float>(*reinterpret_cast<double*>(&buffer[(j+1) * sizeof(double)]));
 		float z = static_cast<float>(*reinterpret_cast<double*>(&buffer[(j+2) * sizeof(double)]));
@@ -405,6 +407,9 @@ void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& 
 		_up.y = y > _up.y ? y : _up.y;
 		_up.z = z > _up.x ? z : _up.z;
 	}
+
+	std::memcpy(_coords.data() + c, _coords.data(), _count * 3 * sizeof(float));
+
 }
 #else
 void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
@@ -438,6 +443,8 @@ void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& 
 		}
 		++i;
 	}
+	for(uint i = 0; i < _count*3; ++i)
+		_coords.emplace_back(_coords[i]);
 }
 #endif // USE_BINARY
 
@@ -508,7 +515,7 @@ void CameraController::update(GLFWwindow* _window, float _delta) {
 
 }
 
-#if USE_SPLINE_SHADER
+#if !USE_SPLINE_SHADER
 void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vector<float>& _traj, std::vector<float>& _out) {
 	//cyclic boundary conditions
 	{
@@ -529,26 +536,26 @@ void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vecto
 		for (uint idx = 0; idx < _count; ++idx) {
 
 			//remove cyclic boundary conditions
-			float osx = 0.f, osy = 0.f, osz = 0.f;
+			if (ENFORCE_CYCLIC_BOUNDARIES) {
+				float osx = 0.f, osy = 0.f, osz = 0.f;
 
-			for (uint i = 1; i < _steps; ++i) {
-				const uint offsetL = 3 * idx + (i - 1) * _count * 3;
-				const uint offsetH = 3 * idx + i * _count * 3;
+				for (uint i = 1; i < _steps; ++i) {
+					const uint offsetL = 3 * idx + (i - 1) * _count * 3;
+					const uint offsetH = 3 * idx + i * _count * 3;
 
-				const float dx = _traj[offsetH] - _traj[offsetL];
-				const float dy = _traj[offsetH + 1] - _traj[offsetL + 1];
-				const float dz = _traj[offsetH + 2] - _traj[offsetL + 2];
+					const float dx = _traj[offsetH] - _traj[offsetL];
+					const float dy = _traj[offsetH + 1] - _traj[offsetL + 1];
+					const float dz = _traj[offsetH + 2] - _traj[offsetL + 2];
 
-				_traj[offsetL] += osx * hx;
-				_traj[offsetL + 1] += osy * hy;
-				_traj[offsetL + 2] += osz * hz;
+					_traj[offsetL] += osx * hx;
+					_traj[offsetL + 1] += osy * hy;
+					_traj[offsetL + 2] += osz * hz;
 
-				osx += dx >= hx2 ? -1.f : dx <= -hx2 ? 1.f : 0.f;
-				osy += dy >= hy2 ? -1.f : dy <= -hy2 ? 1.f : 0.f;
-				osz += dz >= hz2 ? -1.f : dz <= -hz2 ? 1.f : 0.f;
+					osx += dx >= hx2 ? -1.f : dx <= -hx2 ? 1.f : 0.f;
+					osy += dy >= hy2 ? -1.f : dy <= -hy2 ? 1.f : 0.f;
+					osz += dz >= hz2 ? -1.f : dz <= -hz2 ? 1.f : 0.f;
+				}
 			}
-
-			//std::cout << osx << " " << osy << " " << osz << std::endl;
 
 			std::vector<float> tmp(_steps);
 			std::vector<float> x(_steps);
@@ -568,8 +575,8 @@ void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vecto
 				}
 
 				//boundary conditions
-				x[0] = 3.f * ((_traj[3 * idx + _count * 3 + k] - _traj[3 * idx + k]) / t - 0.f);
-				x[_steps - 1] = 3.0 * (0.f - (_traj[3 * idx + (_steps - 1) * _count * 3 + k] - _traj[3 * idx + (_steps - 2) * _count * 3 + k]) / t);
+				x[0] = 3.f * ((_traj[3 * idx + _count * 3 + k] - _traj[3 * idx + k]) / t);
+				x[_steps - 1] = 3.0 * (-(_traj[3 * idx + (_steps - 1) * _count * 3 + k] - _traj[3 * idx + (_steps - 2) * _count * 3 + k]) / t);
 
 				//solve
 				tmp[0] = m13 / m2;
@@ -584,6 +591,11 @@ void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vecto
 				for (uint i = _steps - 2; i > 0; --i)
 					x[i] -= tmp[i] * x[i + 1];
 				x[0] -= tmp[0] * x[1];
+
+				if (idx == 0) {
+					for (uint i = 0; i < _steps; ++i)
+						_out[i] = x[i];
+				}
 
 				//calc weights
 				for (uint i = 1; i < _steps; ++i) {

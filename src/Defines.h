@@ -44,19 +44,19 @@
 #define WINDOW_HEIGHT 1080
 
 /*
-	Toggle this if the cyclic boundary conditions should be enforced (only valid for cubic splines)
-	Valid values:	0, 1
-	Default:		1
-*/
-#define ENFORCE_CYCLIC_BOUNDARIES = 0
-
-/*
 	0 - no interpolation
 	1 - linear interpoltation
 	2 - cubic spline interpolation
 	Default:		2
 */
 #define INTERPOLATION_TYPE 2
+
+/*
+	Toggle this if the cyclic boundary conditions should be enforced.
+	Valid values:	0, 1
+	Default:		1
+*/
+#define ENFORCE_CYCLIC_BOUNDARIES 0
 
 /*
 	Set this to 0 when using the cubic spline interpolation but it gets stuck. Setting this to 0 will
@@ -104,6 +104,8 @@
 #define SSAO_KERNEL_SIZE 64
 #define SSAO_RADIUS 1.f
 #define SSAO_BIAS 0.025f
+
+#define GL_DEBUG 1
 
 /*
 Set this to "" if needed when debugging in VsCode

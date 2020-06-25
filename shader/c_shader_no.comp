@@ -17,6 +17,8 @@ layout(location = 6) uniform vec4 color;
 
 layout (location = 8) uniform vec3 dims;
 
+layout (location = 9) uniform int cbc = 1;
+
 layout(std430, binding = 1) buffer traj {
 	float traj_data[];
 };
@@ -43,13 +45,22 @@ void main() {
 	const uint verIndex = index * sphere_vertices * 3;
 
 	//build spheres at given centre
-	const vec3 cntr = vec3(traj_data[offset_t], traj_data[offset_t + 1], traj_data[offset_t + 2]);
+	vec3 pos = vec3(traj_data[offset_t], traj_data[offset_t + 1], traj_data[offset_t + 2]);
+
+	if(cbc == 1){
+		const float hx = dims.x;
+		const float hy = dims.y;
+		const float hz = dims.z;
+		pos.x = pos.x > dims.x ? pos.x - hx : pos.x < 0.f ? pos.x + hx : pos.x;
+		pos.y = pos.y > dims.y ? pos.y - hy : pos.y < 0.f ? pos.y + hy : pos.y;
+		pos.z = pos.z > dims.z ? pos.z - hz : pos.z < 0.f ? pos.z + hz : pos.z;
+	}
 
 	for(int i = 0; i < sphere_vertices; ++i) {	
 		//pos
-		ver_data[verIndex + 3*i] = cntr.x + sphere_data[3*i] * radius;
-		ver_data[verIndex + 3*i + 1] = cntr.y + sphere_data[3*i+1] * radius;
-		ver_data[verIndex + 3*i + 2] = cntr.z + sphere_data[3*i+2] * radius;		
+		ver_data[verIndex + 3*i] = pos.x + sphere_data[3*i] * radius;
+		ver_data[verIndex + 3*i + 1] = pos.y + sphere_data[3*i+1] * radius;
+		ver_data[verIndex + 3*i + 2] = pos.z + sphere_data[3*i+2] * radius;		
 	}
 	
 }

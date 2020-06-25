@@ -17,6 +17,8 @@ layout(location = 6) uniform vec4 color;
 
 layout (location = 8) uniform vec3 dims;
 
+layout (location = 9) uniform int cbc = 1;
+
 layout(std430, binding = 1) buffer traj {
 	float traj_data[];
 };
@@ -50,11 +52,22 @@ void main() {
 	const vec3 cntrLow = vec3(traj_data[offsetLow + 3*index], traj_data[offsetLow + 3*index + 1], traj_data[offsetLow + 3*index + 2]);
 	const vec3 cntrHigh = vec3(traj_data[offsetUp + 3*index], traj_data[offsetUp + 3*index + 1], traj_data[offsetUp + 3*index + 2]);
 
+	vec3 pos = mix(cntrLow, cntrHigh, T);
+
+	if(cbc == 1){
+		const float hx = dims.x;
+		const float hy = dims.y;
+		const float hz = dims.z;
+		pos.x = pos.x > dims.x ? pos.x - hx : pos.x < 0.f ? pos.x + hx : pos.x;
+		pos.y = pos.y > dims.y ? pos.y - hy : pos.y < 0.f ? pos.y + hy : pos.y;
+		pos.z = pos.z > dims.z ? pos.z - hz : pos.z < 0.f ? pos.z + hz : pos.z;
+	}
+
 	for(int i = 0; i < sphere_vertices; ++i) {		
 		//pos
-		ver_data[verIndex + i*vertexSize] = mix(cntrLow.x, cntrHigh.x, T) + sphere_data[3*i] * radius;
-		ver_data[verIndex + i*vertexSize + 1] = mix(cntrLow.y, cntrHigh.y, T) + sphere_data[3*i+1] * radius;
-		ver_data[verIndex + i*vertexSize + 2] = mix(cntrLow.z, cntrHigh.z, T) + sphere_data[3*i+2] * radius;		
+		ver_data[verIndex + i*vertexSize] = pos.x + sphere_data[3*i] * radius;
+		ver_data[verIndex + i*vertexSize + 1] = pos.y + sphere_data[3*i+1] * radius;
+		ver_data[verIndex + i*vertexSize + 2] = pos.z + sphere_data[3*i+2] * radius;		
 	}
 	
 }

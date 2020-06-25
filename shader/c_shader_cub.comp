@@ -17,6 +17,8 @@ layout(location = 6) uniform vec4 color;
 
 layout (location = 8) uniform vec3 dims;
 
+layout (location = 9) uniform int cbc = 1;
+
 layout(std430, binding = 1) buffer traj {
 	float traj_data[];
 };
@@ -59,10 +61,11 @@ void main() {
 		pos = ((m_d * h + m_c) * h + m_b) * h + m_a;
 
 		//cyclic boundary conditions
-		//pos.x = pos.x > up.x ? pos.x - hx : pos.x < down.x ? pos.x + hx : pos.x;
-		//pos.y = pos.y > up.y ? pos.y - hy : pos.y < down.y ? pos.y + hy : pos.y;
-		//pos.z = pos.z > up.z ? pos.z - hz : pos.z < down.z ? pos.z + hz : pos.z;
-
+		if(cbc == 1){
+			pos.x = pos.x > dims.x ? pos.x - hx : pos.x < 0.f ? pos.x + hx : pos.x;
+			pos.y = pos.y > dims.y ? pos.y - hy : pos.y < 0.f ? pos.y + hy : pos.y;
+			pos.z = pos.z > dims.z ? pos.z - hz : pos.z < 0.f ? pos.z + hz : pos.z;
+		}
 	} else
 		pos = vec3(traj_data[offset + 3*index], traj_data[offset + 3*index + 1], traj_data[offset + 3*index + 2]);
 

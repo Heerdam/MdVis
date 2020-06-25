@@ -5,12 +5,14 @@
 #include "OBJ_Loader.h"
 #include "lodepng.h"
 
+#if GL_DEBUG
 void GLAPIENTRY MessageCallback(GLenum /*source*/, GLenum type, GLuint /*id*/, GLenum severity, GLsizei /*length*/, const GLchar* message, const void* /*userParam*/) {
 	if (type != GL_DEBUG_TYPE_ERROR) return;
 	fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
 		(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
 		type, severity, message);
 }
+#endif
 
 struct Proxy {
 	// -------------------- File --------------------
@@ -31,6 +33,7 @@ struct Proxy {
 	bool rmb_down = false;
 	double oldX = -1.f, oldY = -1.f;
 	float t = 0.f, deltaT = 0.1f; //increment per second
+	double deltaTime = 1. / 60.;
 	bool isPaused = true;
 
 	// -------------------- Constants --------------------
@@ -112,7 +115,18 @@ void load(Proxy& _proxy) {
 	}
 
 	//PARSE FILE
-	FileParser::loadFile(std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "coords.traj")).string(), _proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
+#if USE_BINARY
+	FileParser::loadFile(_proxy.pathToFile.empty() ? 
+		std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "demo/demo_b.traj")).string() :
+		std::filesystem::absolute(std::filesystem::path(_proxy.pathToFile)).string(),
+		_proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
+#else
+	FileParser::loadFile(_proxy.pathToFile.empty() ?
+		std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "demo/demo_a.traj")).string() :
+		std::filesystem::absolute(std::filesystem::path(_proxy.pathToFile)).string(),
+		_proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
+#endif
+
 	_proxy.TIMESTEPS = static_cast<uint>(_proxy.coords.size() / 3) / _proxy.ATOMCOUNT;
 
 	Logger::LOG("LOG:\tLoading trajectory file [" + _proxy.pathToFile + "]", true);
@@ -253,10 +267,6 @@ void load(Proxy& _proxy) {
 
 				glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
-				
-
-				
-				//return;
 				glGenBuffers(1, &_proxy->c_ssbo_weights);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_weights);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, _proxy->ATOMCOUNT * 12 * sizeof(float) * _proxy->TIMESTEPS, nullptr, GL_STATIC_DRAW);
@@ -282,12 +292,12 @@ void load(Proxy& _proxy) {
 				glUniform1i(1, _proxy->ATOMCOUNT);
 				glUniform1i(2, _proxy->TIMESTEPS);
 				glUniform3fv(3, 1, glm::value_ptr(_proxy->dims));
+				glUniform1i(1, ENFORCE_CYCLIC_BOUNDARIES);
 
 				glDispatchCompute(_proxy->ATOMCOUNT, 1, 1);
 
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
 				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
-				//TODO delete traj
 				shader.unbind();
 
 				glDeleteBuffers(1, &tmp);
@@ -295,31 +305,6 @@ void load(Proxy& _proxy) {
 				glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 				Logger::LOG("LOG:\tSpline interpolated.\n", true);
 
-				/*
-				glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_traj);
-				float* data = new float[_proxy->ATOMCOUNT * 3 * sizeof(float) * _proxy->TIMESTEPS];
-				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, _proxy->ATOMCOUNT * 3 * sizeof(float) * _proxy->TIMESTEPS, data);
-
-				std::ofstream out("diff.txt");
-				for (uint i = 0; i < _proxy->ATOMCOUNT * 3 * _proxy->TIMESTEPS; i++) {
-					out << data[i] << std::endl;
-					if (i % 3 == 2) out << std::endl;
-				}
-				*/
-				/*
-				glBindBuffer(GL_SHADER_STORAGE_BUFFER, _proxy->c_ssbo_weights);
-				float* data = new float[_proxy->ATOMCOUNT * 12 * sizeof(float) * _proxy->TIMESTEPS];
-				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, _proxy->ATOMCOUNT * 12 * sizeof(float) * _proxy->TIMESTEPS, data);
-				
-				
-				//SplineBuilder::build(_proxy->ATOMCOUNT, _proxy->TIMESTEPS, _proxy->dims, _proxy->coords, _proxy->weights);
-
-				std::ofstream out("diff.txt");
-				for (uint i = 0; i < _proxy->ATOMCOUNT * 12 * _proxy->TIMESTEPS; i++) {
-					out << data[i] << std::endl;
-					if (i % 12 == 11) out << std::endl;
-				}
-				*/
 			});
 		}
 #elif INTERPOLATION_TYPE == 2
@@ -490,8 +475,8 @@ void load(Proxy& _proxy) {
 		_proxy.asyncQueue.push([](Proxy* _proxy)->void {
 
 			objl::Loader Loader;
-			if (!Loader.LoadFile(VSC_WORKDIR_OFFSET + "axisnrm.obj"))
-				Logger::LOG("ERROR:\tcan't load axisnrm.obj!", true);
+			if (!Loader.LoadFile(VSC_WORKDIR_OFFSET + "axis.obj"))
+				Logger::LOG("ERROR:\tcan't load axis.obj!", true);
 
 			const uint vertexSize = 9u;
 			objl::Mesh curMesh = Loader.LoadedMeshes[0];
@@ -697,9 +682,12 @@ void load(Proxy& _proxy) {
 	
 }
 
-int main() {
+int main(int argc, char* argv[]) {
 
 	Proxy proxy;
+
+	if (argc >= 1)
+		proxy.pathToFile = std::string(argv[0]);
 
 	Logger::init();
 	Logger::LOG("\n\n\t\t __  __      _ __      __ _\n\t\t|  \\/  |    | |\\ \\    / /(_)\n\t\t| \\  / |  __| | \\ \\  / /  _  ___\n\t\t| |\\/| | / _` |  \\ \\/ /  | |/ __|\n\t\t| |  | || (_| |   \\  /   | |\\__ \\\n\t\t|_|  |_| \\__,_|    \\/    |_||___ /", false);
@@ -740,10 +728,9 @@ int main() {
 		std::vector<unsigned char> buffer;
 		uint w, h;
 		lodepng::decode(buffer, w, h, "../logo.png");
-
 		images[0] = GLFWimage{ (int)w, (int)h, buffer.data() };
-		images[1] = GLFWimage(images[0]);
-		glfwSetWindowIcon(proxy.window, 2, images);
+		//images[1] = GLFWimage{ (int)w, (int)h, buffer.data() };
+		glfwSetWindowIcon(proxy.window, 1, images);
 	}
 
 	if (!GL_COMPUTE_SHADER && !(GL_MAX_COMPUTE_WORK_GROUP_SIZE > 1024)) {
@@ -755,7 +742,9 @@ int main() {
 	glEnable(GL_DEBUG_OUTPUT);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_SRGB);
+#if GL_DEBUG
 	glDebugMessageCallback(MessageCallback, 0);
+#endif
 
 	Logger::LOG("LOG:\tOpengl context set up and ready.\n", true);
 
@@ -782,9 +771,9 @@ int main() {
 			proxy->deltaT *= -1.f;
 		if (proxy->isPaused) {
 			if (_key == GLFW_KEY_X && _action == GLFW_PRESS)
-				proxy->t = std::fmod(proxy->t += proxy->deltaT, 1.f);
+				proxy->t = std::fmod(proxy->t += proxy->deltaT * proxy->deltaTime, 1.f); //TODO
 			if (_key == GLFW_KEY_Y && _action == GLFW_PRESS)
-				proxy->t = std::fmod(proxy->t -= proxy->deltaT, 1.f);
+				proxy->t = std::fmod(proxy->t -= proxy->deltaT * proxy->deltaTime, 1.f);
 		}
 
 	});
@@ -801,6 +790,7 @@ int main() {
 		proxy->controller.mbCB(_button, _action, _mods);
 	});
 
+	//start laoding
 	std::thread async(&load, std::ref(proxy));
 
 	double time = glfwGetTime();
@@ -810,8 +800,6 @@ int main() {
 	uint index = 0;
 	sync[0] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 	sync[1] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-
-	double lastDeltaTime = 1. / 60.;
 
 	while (!glfwWindowShouldClose(proxy.window) && !proxy.shouldTerminate) {
 
@@ -840,7 +828,7 @@ int main() {
 		//create vertexbuffer
 		if (proxy.isGLloaded) {
 
-			proxy.controller.update(proxy.window, static_cast<float>(lastDeltaTime));
+			proxy.controller.update(proxy.window, static_cast<float>(proxy.deltaTime));
 
 			// -------------------- Compute Pass --------------------
 			{
@@ -865,6 +853,7 @@ int main() {
 				glUniform4f(6, 0.75f, 0.5f, 0.4f, 1.f);
 				glUniform1f(7, 1.f / proxy.TIMESTEPS);
 				glUniform3fv(8, 1, glm::value_ptr(proxy.dims));
+				glUniform1i(9, ENFORCE_CYCLIC_BOUNDARIES);
 
 				glDispatchCompute(proxy.ATOMCOUNT, 1, 1);
 
@@ -1056,7 +1045,7 @@ int main() {
 #endif
 
 			// -------------------- SYNC --------------------
-			glClientWaitSync(sync[index], GL_SYNC_FLUSH_COMMANDS_BIT, 1000);
+			glClientWaitSync(sync[index], GL_SYNC_FLUSH_COMMANDS_BIT, 1000); //TODO
 			glDeleteSync(sync[index]);
 			sync[index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 			index = (index++) % 2;
@@ -1064,12 +1053,12 @@ int main() {
 			// -------------------- FPS --------------------
 
 			if (!proxy.isPaused) {
-				proxy.t += proxy.deltaT* lastDeltaTime;
+				proxy.t += proxy.deltaT * proxy.deltaTime;
 				proxy.t -= std::floor(proxy.t);
 			}
 
 			frame++;
-			lastDeltaTime = glfwGetTime() - ctime;
+			proxy.deltaTime = glfwGetTime() - ctime;
 			if (ctime - time >= 1.0) {
 #if LOG_FRAMES
 				Logger::LOG(std::to_string(proxy.t) + "\t" + std::to_string(frame) + "\t[" + std::to_string(lastDeltaTime) + "]", true);
