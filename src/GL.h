@@ -65,15 +65,10 @@ public:
 	float viewportWidth = 0.f;
 	float viewportHeight = 0.f;
 
-	Vec3 target;
-	float azimuth = 0.f, height = 90.f, distance = 100.f;
-	
 	void update();
 
 	void lookAt(const Vec3&);
 	void normalizeUp();
-	void normalizeUpAxisLocked(const Vec3&);
-	void arcball();
 
 };
 

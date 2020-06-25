@@ -115,6 +115,7 @@ void load(Proxy& _proxy) {
 	}
 
 	//PARSE FILE
+	Logger::LOG("LOG:\tLoading trajectory file:", true);
 #if USE_BINARY
 	FileParser::loadFile(_proxy.pathToFile.empty() ? 
 		std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "demo/demo_b.traj")).string() :
@@ -129,7 +130,6 @@ void load(Proxy& _proxy) {
 
 	_proxy.TIMESTEPS = static_cast<uint>(_proxy.coords.size() / 3) / _proxy.ATOMCOUNT;
 
-	Logger::LOG("LOG:\tLoading trajectory file [" + _proxy.pathToFile + "]", true);
 	Logger::LOG("\t -> Atoms: " + std::to_string(_proxy.ATOMCOUNT) + " Steps: " + std::to_string(_proxy.TIMESTEPS) + "", false);
 	Logger::LOG("\t -> Points: " + std::to_string(_proxy.coords.size()/3), false);
 	Logger::LOG("\t -> Bounds: [" + std::to_string(_proxy.up.x) + ", " + std::to_string(_proxy.up.y) + ", " + std::to_string(_proxy.up.z) + "]\n", false);
@@ -686,8 +686,8 @@ int main(int argc, char* argv[]) {
 
 	Proxy proxy;
 
-	if (argc >= 1)
-		proxy.pathToFile = std::string(argv[0]);
+	if (argc >= 2)
+		proxy.pathToFile = std::string(argv[1]);
 
 	Logger::init();
 	Logger::LOG("\n\n\t\t __  __      _ __      __ _\n\t\t|  \\/  |    | |\\ \\    / /(_)\n\t\t| \\  / |  __| | \\ \\  / /  _  ___\n\t\t| |\\/| | / _` |  \\ \\/ /  | |/ __|\n\t\t| |  | || (_| |   \\  /   | |\\__ \\\n\t\t|_|  |_| \\__,_|    \\/    |_||___ /", false);

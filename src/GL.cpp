@@ -265,23 +265,6 @@ void Camera::normalizeUp() {
 	//up = NOR(CRS(right, direction));
 }
 
-void Camera::normalizeUpAxisLocked(const Vec3& _up) {
-	right = glm::normalize(glm::cross(_up, direction));
-	up = glm::normalize(glm::cross(direction, right));
-	if (std::isnan(up[0]) || std::isnan(up[1]) || std::isnan(up[2]))
-		up = _up;
-}
-
-void Camera::arcball() {
-	float x = distance * std::sin(glm::radians(height)) * std::cos(glm::radians(azimuth)) + target[0];
-	float y = distance * std::sin(glm::radians(height)) * std::sin(glm::radians(azimuth)) + target[1];
-	float z = distance * std::cos(glm::radians(height)) + target[2];
-
-	position.x = x;
-	position.y = z;
-	position.z = y;
-}
-
 std::pair<std::vector<float>, std::vector<uint>> Icosahedron::create(uint _subdivisions) {
 	
 	using IndexedMesh = std::pair<std::vector<float>, std::vector<uint>>;
@@ -377,6 +360,7 @@ std::pair<std::vector<float>, std::vector<uint>> Icosahedron::create(uint _subdi
 
 #if USE_BINARY
 void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
+	Logger::LOG("\t" + _path, false);
 	std::ifstream in(_path, std::ios::binary | std::ios::in);
 	std::vector<char> buffer(std::istreambuf_iterator<char>(in), {});	
 	_low.x = _low.y = _low.z = std::numeric_limits<float>::infinity();
@@ -413,6 +397,7 @@ void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& 
 }
 #else
 void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
+	Logger::LOG("\t" + _path, false);
 	std::fstream in(_path);
 	char line[256];
 	uint i = 0;
