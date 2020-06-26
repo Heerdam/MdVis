@@ -2,7 +2,7 @@
 
 # MdVis
 
-MdVis is a high performance visualizer for trajectory files written in c++ and opengl. Namely output from MdAtom.
+MdVis is a high performance visualizer written in c++ and opengl. It is used namely for visualizing output from MdAtom.
 
 ## Building
 Clone the repository with 
@@ -10,7 +10,7 @@ Clone the repository with
 git clone git@github.com:Heerdam/MdVis.git.
 ````
 Important:
-MdVis needs c++17 standart. Make sure that at least gcc 9 is installed. Furthermore, **your gpu must support opengl 4.3!**
+MdVis needs c++17. Make sure that at least gcc 9 is installed. Furthermore, **your gpu must support opengl 4.3 or it will not run!**
 
 ### GNU/ Linux
 Build and run MdVis as following:
@@ -19,16 +19,47 @@ mkdir bin
 cd bin
 cmake ..
 make -j4
-./mdatom -path
+./mdatom [path]
 ````
-path is either a valid path to a .traj file or nothing to show the demo.traj file
+path is either a valid path to a .traj file or nothing to show the demo.traj file.
 
 ### Windows
 Run the Cmake gui to creat the .sln file. In Visual Studio set MdVis as startup project and build/run it.
 
 ## Using MdVis and Features
-Coming soon...
+All flags to configurating MdVis are located in the Defines.h header file.
+
+### General configuration
+#### Window size ###
+#### Widget size ###
+#### Interpolation type ###
+#### Cyclic boundary conditions ###
+#### Logging ###
+
+### Performance
+
+
 
 ## Trajectory Specifications
+MdVis can parse binary or ascasii file format. The flags can be set in the Define.h file to switch between the modes.
+### binary file format ###
+The binary file is similar to the ascasii file format that it takes the exact same layout. The easiest way to achieve it is to push it into a vector and write the vector to a file (e.g. std::ofstream).
+```
+{ number_of_atoms, box_size_x box_size_y box_size_z, atom_1_step_0_x, atom_1_step_0_y .... }
+```
+### ascasii file format
+```
+number_of_Atoms
+box_size_x box_size_y box_size_z
+atom_1_step_0_x atom_1_step_0_y atom_1_step_0_z
+  ...
+atom_n_step_0_x atom_n_step_0_y atom_n_step_0_z
+atom_1_step_1_x atom_1_step_1_y atom_1_step_1_z
+  ...
+atom_n_step_1_x atom_n_step_1_y atom_n_step_1_z
+atom_1_step_n_x atom_1_step_n_y atom_1_step_n_z
+  ...
+atom_n_step_n_x atom_n_step_n_y atom_n_step_n_z
+```
 
 ### Setting up MdAtom
