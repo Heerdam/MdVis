@@ -42,13 +42,13 @@ All flags to configurating MdVis are located in the Defines.h header file.
 #### Computing spline 
 
 ## Trajectory Specifications
-MdVis can parse binary or ascasii file format. The flags can be set in the Define.h file to switch between the modes.
-### binary file format ###
-The binary file is similar to the ascasii file format that it takes the exact same layout. The easiest way to achieve it is to push it into a vector and write the vector to a file (e.g. std::ofstream).
+MdVis can parse binary or ascii file format. The flags can be set in the Define.h file to switch between the modes.
+### Binary file format ###
+The binary file is similar to the ascii file format that it takes the exact same layout. The easiest way to achieve it is to push it into a vector and write the vector to a file (e.g. std::ofstream).
 ```
 { number_of_atoms, box_size_x box_size_y box_size_z, atom_1_step_0_x, atom_1_step_0_y .... }
 ```
-### ascasii file format
+### Ascii file format
 ```
 number_of_Atoms
 box_size_x box_size_y box_size_z
@@ -85,4 +85,4 @@ void TrajectoryFileWriter::writeBeforeRun() {
 }
 ````
 
-#### ASCASII
+#### Ascii
