@@ -86,3 +86,4 @@ void TrajectoryFileWriter::writeBeforeRun() {
 ````
 
 #### Ascii
+Implement a writer that outputs the trajectories in the proper format. Don't print the initial positions. 
