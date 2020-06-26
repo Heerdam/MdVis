@@ -30,15 +30,16 @@ Run the Cmake gui to creat the .sln file. In Visual Studio set MdVis as startup 
 All flags to configurating MdVis are located in the Defines.h header file.
 
 ### General configuration
-#### Window size ###
-#### Widget size ###
-#### Interpolation type ###
-#### Cyclic boundary conditions ###
-#### Logging ###
+#### Window size 
+#### Widget size 
+#### Interpolation type 
+#### Cyclic boundary conditions
+#### Logging 
 
 ### Performance
-
-
+#### Icosahedron
+#### SSAO
+#### Computing spline 
 
 ## Trajectory Specifications
 MdVis can parse binary or ascasii file format. The flags can be set in the Define.h file to switch between the modes.
@@ -63,3 +64,25 @@ atom_n_step_n_x atom_n_step_n_y atom_n_step_n_z
 ```
 
 ### Setting up MdAtom
+#### Binary
+Replace the function writeBeforeRun() in the file TrajectoryFileWriter.cpp with the following function:
+````
+void TrajectoryFileWriter::writeBeforeRun() {
+    ofstream fout1; // trajectory output
+    if (par.trajectoryOutput) {
+        fout1.open(trajectoryCoordinatesFilename, ios::out);
+        if (fout1.bad()) {
+            throw std::runtime_error("can't open " + trajectoryCoordinatesFilename);
+        }
+        //fout1 << par.title << endl;
+        std::vector<double> tmp(4);
+        tmp[0] = static_cast<double>(par.numberAtoms);
+        tmp[1] = par.boxSize[0];
+        tmp[2] = par.boxSize[1];
+        tmp[3] = par.boxSize[2];
+        writeOutTrajectoryStepInBinaryForm(tmp);     
+    }
+}
+````
+
+#### ASCASII
