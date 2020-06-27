@@ -8,7 +8,6 @@ layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout (location = 1) uniform int atomCount;
 layout (location = 2) uniform int steps; 
 layout (location = 3) uniform vec3 dims;
-layout (location = 4) uniform int cbc = 1;
 
 layout(std430, binding = 1) coherent buffer traj {
 	float traj_data[];
@@ -28,37 +27,35 @@ void main() {
 	const uint offset_X = idx *  steps * 2;
 	const uint offset_Tmp = idx *  steps * 2 + steps;
 
-	if(cbc == 1){
-		const float hx = dims.x;
-		const float hy = dims.y;
-		const float hz = dims.z;
+	const float hx = dims.x;
+	const float hy = dims.y;
+	const float hz = dims.z;
 
-		const float hx2 = hx/2.f;
-		const float hy2 = hy/2.f;
-		const float hz2 = hz/2.f;
+	const float hx2 = hx/2.f;
+	const float hy2 = hy/2.f;
+	const float hz2 = hz/2.f;
 
-		float osx = 0.f, osy = 0.f, osz = 0.f;
+	float osx = 0.f, osy = 0.f, osz = 0.f;
 	
 		//remove cyclic boundary conditions	
-		for(uint i = 1; i < steps; ++i) {
-			const uint offsetL = 3*idx + (i-1)*atomCount*3;
-			const uint offsetH = 3*idx + i*atomCount*3;
+	for(uint i = 1; i < steps; ++i) {
+		const uint offsetL = 3*idx + (i-1)*atomCount*3;
+		const uint offsetH = 3*idx + i*atomCount*3;
 
-			const float dx = traj_data[offsetH] - traj_data[offsetL];
-			const float dy = traj_data[offsetH + 1] - traj_data[offsetL + 1];
-			const float dz = traj_data[offsetH + 2] - traj_data[offsetL + 2];
+		const float dx = traj_data[offsetH] - traj_data[offsetL];
+		const float dy = traj_data[offsetH + 1] - traj_data[offsetL + 1];
+		const float dz = traj_data[offsetH + 2] - traj_data[offsetL + 2];
 
-			traj_data[offsetL] += osx * hx;
-			traj_data[offsetL+1] += osy * hy;
-			traj_data[offsetL+2] += osz * hz;
+		traj_data[offsetL] += osx * hx;
+		traj_data[offsetL+1] += osy * hy;
+		traj_data[offsetL+2] += osz * hz;
 
-			osx += dx >= hx2 ? -1.f : dx <= -hx2 ? 1.f : 0.f;
-			osy += dy >= hy2 ? -1.f : dy <= -hy2 ? 1.f : 0.f;
-			osz += dz >= hz2 ? -1.f : dz <= -hz2 ? 1.f : 0.f;	
-		}
-
-		memoryBarrierBuffer();
+		osx += dx >= hx2 ? -1.f : dx <= -hx2 ? 1.f : 0.f;
+		osy += dy >= hy2 ? -1.f : dy <= -hy2 ? 1.f : 0.f;
+		osz += dz >= hz2 ? -1.f : dz <= -hz2 ? 1.f : 0.f;	
 	}
+
+	memoryBarrierBuffer();
 	
 	const float t = 1.f / float(steps);
 	const float m2 = (2.f * t) / 3.;

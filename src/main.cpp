@@ -260,7 +260,7 @@ void load(Proxy& _proxy) {
 
 	if (_proxy.TIMESTEPS > 1) {
 
-#if USE_SPLINE_SHADER && INTERPOLATION_TYPE == 2
+#if COMPUTE_SPLINE_ON_GPU && INTERPOLATION_TYPE == 2
 		{
 			std::lock_guard<std::mutex> lock(_proxy.mutex);
 			_proxy.asyncQueue.push([](Proxy* _proxy)->void {
@@ -292,7 +292,6 @@ void load(Proxy& _proxy) {
 				glUniform1i(1, _proxy->ATOMCOUNT);
 				glUniform1i(2, _proxy->TIMESTEPS);
 				glUniform3fv(3, 1, glm::value_ptr(_proxy->dims));
-				glUniform1i(1, ENFORCE_CYCLIC_BOUNDARIES);
 
 				glDispatchCompute(_proxy->ATOMCOUNT, 1, 1);
 
@@ -322,7 +321,7 @@ void load(Proxy& _proxy) {
 			}
 
 		}
-#endif // USE_SPLINE_SHADER
+#endif // COMPUTE_SPLINE_ON_GPU
 	}
 
 	//Lights
@@ -770,10 +769,15 @@ int main(int argc, char* argv[]) {
 		if (_key == GLFW_KEY_C && _action == GLFW_PRESS)
 			proxy->deltaT *= -1.f;
 		if (proxy->isPaused) {
-			if (_key == GLFW_KEY_X && _action == GLFW_PRESS)
-				proxy->t = std::fmod(proxy->t += proxy->deltaT * proxy->deltaTime, 1.f); //TODO
-			if (_key == GLFW_KEY_Y && _action == GLFW_PRESS)
-				proxy->t = std::fmod(proxy->t -= proxy->deltaT * proxy->deltaTime, 1.f);
+			if (_key == GLFW_KEY_X && _action == GLFW_PRESS) {
+				proxy->t += proxy->deltaT * proxy->deltaTime;
+				proxy->t -= std::floor(proxy->t);
+			} else if (_key == GLFW_KEY_Y && _action == GLFW_PRESS) {
+				proxy->t -= proxy->deltaT * proxy->deltaTime;
+				proxy->t += std::floor(proxy->t);
+			}
+
+			std::cout << proxy->t << std::endl;
 		}
 
 	});
@@ -1027,7 +1031,6 @@ int main(int argc, char* argv[]) {
 
 				glBindVertexArray(proxy.widget_vao);
 				proxy.widgetShader.bind();
-
 
 				Mat4 rot = glm::lookAt(proxy.cam.position, proxy.cam.position + proxy.cam.direction, proxy.cam.up);
 				proxy.widgetCam.position = rot * Vec4(-1.f, 0.f, 0.f, 1.f) * 5.f;

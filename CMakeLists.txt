@@ -25,7 +25,35 @@ add_executable(mdvis
 	src/lodepng.cpp
 )
 
-set(GLAD_API "gl=4.3" CACHE STRING "API type/version pairs, like \"gl=4.6,gles=\", no version means latest")
+FetchContent_Declare(
+        glm
+        GIT_REPOSITORY https://github.com/g-truc/glm
+)
+FetchContent_GetProperties(glm)
+if(NOT glm_POPULATED)
+	FetchContent_Populate(glm)
+	add_subdirectory("${glm_SOURCE_DIR}" "${glm_BINARY_DIR}")
+endif()
+
+FetchContent_Declare(
+        glfw
+        GIT_REPOSITORY https://github.com/glfw/glfw
+)
+
+FetchContent_GetProperties(glfw)
+if(NOT glfw_POPULATED)
+    FetchContent_Populate(glfw)
+
+    set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "Build the GLFW example programs" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "Build the GLFW test programs" FORCE)
+    set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "Build the GLFW documentation" FORCE)
+    set(GLFW_INSTALL OFF CACHE INTERNAL "Generate installation target" FORCE)
+
+    add_subdirectory(${glfw_SOURCE_DIR} ${glfw_BINARY_DIR})
+endif()
+
+
+set(GLAD_API "gl=4.3" CACHE STRING "API type/version pairs, like \"gl=4.3,gles=\", no version means latest")
 FetchContent_Declare(
 	glad
 	GIT_REPOSITORY https://github.com/Dav1dde/glad.git
@@ -37,8 +65,6 @@ if(NOT glad_POPULATED)
 	add_subdirectory("${glad_SOURCE_DIR}" "${glad_BINARY_DIR}")
 endif()
 
-message(STATUS "Building natively")
-
 if (MSVC)
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2 /DNDEBUG")
 else()
@@ -47,21 +73,8 @@ else()
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native -DNDEBUG -flto")
 endif()
 
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "Build the GLFW example programs" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "Build the GLFW test programs" FORCE)
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "Build the GLFW documentation" FORCE)
-set(GLFW_INSTALL OFF CACHE BOOL "Generate installation target" FORCE)
-
-add_subdirectory("${CMAKE_SOURCE_DIR}/libs/glfw-3.3.2")
-include_directories("${CMAKE_SOURCE_DIR}/libs/glfw-3.3.2/include")
-
-add_subdirectory("${CMAKE_SOURCE_DIR}/libs/glm-0.9.9.8")
-include_directories("${CMAKE_SOURCE_DIR}/libs/glm-0.9.9.8/include")
-
 target_link_libraries(mdvis
 		glfw
-		${GLFW_LIBRARIES}
 		glad
 		glm
-		${CMAKE_DL_LIBS}
 )

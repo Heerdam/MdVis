@@ -448,7 +448,6 @@ void CameraController::cursorCB(double _xpos, double _ypos) {
 
 	if (mbDown) {
 		
-
 		float deltaX = -glm::radians(((float)_xpos - oldX) * degreesPerPixel);
 		float deltaY = -glm::radians(((float)_ypos - oldY) * degreesPerPixel);
 
@@ -500,7 +499,7 @@ void CameraController::update(GLFWwindow* _window, float _delta) {
 
 }
 
-#if !USE_SPLINE_SHADER
+#if !COMPUTE_SPLINE_ON_GPU
 void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vector<float>& _traj, std::vector<float>& _out) {
 	//cyclic boundary conditions
 	{
@@ -521,25 +520,23 @@ void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vecto
 		for (uint idx = 0; idx < _count; ++idx) {
 
 			//remove cyclic boundary conditions
-			if (ENFORCE_CYCLIC_BOUNDARIES) {
-				float osx = 0.f, osy = 0.f, osz = 0.f;
+			float osx = 0.f, osy = 0.f, osz = 0.f;
 
-				for (uint i = 1; i < _steps; ++i) {
-					const uint offsetL = 3 * idx + (i - 1) * _count * 3;
-					const uint offsetH = 3 * idx + i * _count * 3;
+			for (uint i = 1; i < _steps; ++i) {
+				const uint offsetL = 3 * idx + (i - 1) * _count * 3;
+				const uint offsetH = 3 * idx + i * _count * 3;
 
-					const float dx = _traj[offsetH] - _traj[offsetL];
-					const float dy = _traj[offsetH + 1] - _traj[offsetL + 1];
-					const float dz = _traj[offsetH + 2] - _traj[offsetL + 2];
+				const float dx = _traj[offsetH] - _traj[offsetL];
+				const float dy = _traj[offsetH + 1] - _traj[offsetL + 1];
+				const float dz = _traj[offsetH + 2] - _traj[offsetL + 2];
 
-					_traj[offsetL] += osx * hx;
-					_traj[offsetL + 1] += osy * hy;
-					_traj[offsetL + 2] += osz * hz;
+				_traj[offsetL] += osx * hx;
+				_traj[offsetL + 1] += osy * hy;
+				_traj[offsetL + 2] += osz * hz;
 
-					osx += dx >= hx2 ? -1.f : dx <= -hx2 ? 1.f : 0.f;
-					osy += dy >= hy2 ? -1.f : dy <= -hy2 ? 1.f : 0.f;
-					osz += dz >= hz2 ? -1.f : dz <= -hz2 ? 1.f : 0.f;
-				}
+				osx += dx >= hx2 ? -1.f : dx <= -hx2 ? 1.f : 0.f;
+				osy += dy >= hy2 ? -1.f : dy <= -hy2 ? 1.f : 0.f;
+				osz += dz >= hz2 ? -1.f : dz <= -hz2 ? 1.f : 0.f;
 			}
 
 			std::vector<float> tmp(_steps);
@@ -603,6 +600,6 @@ void SplineBuilder::build(uint _count, uint _steps, const Vec3& dims, std::vecto
 	}
 
 }
-#endif // USE_SPLINE_SHADER
+#endif // COMPUTE_SPLINE_ON_GPU
 
 

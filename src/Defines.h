@@ -56,15 +56,15 @@
 	Valid values:	0, 1
 	Default:		1
 */
-#define ENFORCE_CYCLIC_BOUNDARIES 0
+#define ENFORCE_CYCLIC_BOUNDARIES 1
 
 /*
-	Set this to 0 when using the cubic spline interpolation but it gets stuck. Setting this to 0 will
-	move the building of the spline onto the cpu.
+	Allows ultra fast concurrent calculating of the cubic splines. Set this to 0 if your
+	computer doesnt manage it to link it. (-> if MdVis gets stuck for no reason)
 	Valid values:	0, 1
 	Default:		1
 */
-#define USE_SPLINE_SHADER 1
+#define COMPUTE_SPLINE_ON_GPU 1
 
 /*
 	Defines how many times the icosahedron gets subdivided. More subdivison means smoother surface
@@ -79,7 +79,7 @@
 	Valid values:	0, 1
 	Default:		1
 */
-#define WIDGET_SHOW 0
+#define WIDGET_SHOW 1
 
 #define WIDGET_WIDTH 400
 #define WIDGET_HEIGHT 400
