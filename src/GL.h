@@ -94,8 +94,6 @@ struct Icosahedron {
 	static std::pair<std::vector<float>, std::vector<uint>>create(uint);
 };
 
-#define USE_BINARY 1
-
 struct FileParser {
 	static void loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims);
 };

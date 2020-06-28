@@ -123,7 +123,7 @@ void load(Proxy& _proxy) {
 		_proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
 #else
 	FileParser::loadFile(_proxy.pathToFile.empty() ?
-		std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "demo/demo_a.traj")).string() :
+		std::filesystem::absolute(std::filesystem::path(VSC_WORKDIR_OFFSET + "demo/demo_a_1000.traj")).string() :
 		std::filesystem::absolute(std::filesystem::path(_proxy.pathToFile)).string(),
 		_proxy.coords, _proxy.ATOMCOUNT, _proxy.low, _proxy.up, _proxy.dims);
 #endif
@@ -1064,7 +1064,7 @@ int main(int argc, char* argv[]) {
 			proxy.deltaTime = glfwGetTime() - ctime;
 			if (ctime - time >= 1.0) {
 #if LOG_FRAMES
-				Logger::LOG(std::to_string(proxy.t) + "\t" + std::to_string(frame) + "\t[" + std::to_string(lastDeltaTime) + "]", true);
+				Logger::LOG(std::to_string(proxy.t) + "\t" + std::to_string(frame) + "\t[" + std::to_string(proxy.deltaTime) + "]", true);
 #endif
 				frame = 0;
 				time = ctime;

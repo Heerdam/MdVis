@@ -399,6 +399,7 @@ void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& 
 void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& _count, Vec3& _low, Vec3& _up, Vec3& _dims) {
 	Logger::LOG("\t" + _path, false);
 	std::fstream in(_path);
+	Logger::LOG("\tFile status: " + std::string(in.good() ? "OK" : "FAILED"), false);
 	char line[256];
 	uint i = 0;
 	_low.x = _low.y = _low.z = std::numeric_limits<float>::infinity();

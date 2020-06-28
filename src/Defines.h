@@ -44,6 +44,13 @@
 #define WINDOW_HEIGHT 1080
 
 /*
+	Whether binary or ascii files are being loaded.
+	Valid values:	0, 1
+	Default:		1
+*/
+#define USE_BINARY 0
+
+/*
 	0 - no interpolation
 	1 - linear interpoltation
 	2 - cubic spline interpolation
@@ -89,7 +96,7 @@
 	Valid values:	0, 1
 	Default:		1
 */
-#define LOG_FRAMES 0
+#define LOG_FRAMES 1
 
 /*
 	Enables/ Disables SSAO (Screen Space Ambient Occlusion). Disabling it will increase performance.
