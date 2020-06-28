@@ -48,7 +48,7 @@ Defines how many times the icosahedron gets subdivided. More subdivison means sm
 #### SSAO
 Enables/ Disables SSAO (Screen Space Ambient Occlusion). Disabling it will increase performance.
 #### Computing spline 
-Allows ultra fast concurrent calculating of the cubic splines on the gpu. Set this to 0 if your computer doesnt manage to link the shader. (-> if MdVis gets stuck for no reason)
+Allows ultra fast concurrent computing of the cubic splines on the gpu. Set this to 0 if your computer doesnt manage to link the shader. (-> if MdVis gets stuck for no reason)
   
 ### Key bindings
 Rotate the camera with left mouse button pressed.
