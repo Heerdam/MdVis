@@ -48,7 +48,7 @@ Defines how many times the icosahedron gets subdivided. More subdivison means sm
 #### SSAO
 Enables/ Disables SSAO (Screen Space Ambient Occlusion). Disabling it will increase performance.
 #### Computing spline 
-Allows ultra fast concurrent calculating of the cubic splines on the gpu. Set this to 0 if your computer doesnt manage to link the shader. (-> if MdVis gets stuck for no reason)
+Allows ultra fast concurrent computing of the cubic splines on the gpu. Set this to 0 if your computer doesnt manage to link the shader. (-> if MdVis gets stuck for no reason)
   
 ### Key bindings
 Rotate the camera with left mouse button pressed.
@@ -81,6 +81,7 @@ atom_n_step_n_x atom_n_step_n_y atom_n_step_n_z
 ```
 
 ### Setting up MdAtom
+Important: Output must be set up in the input file of mdatom. Set TrajectoryOutputFormat to 0 for binary and 1 für ascii.
 #### Binary
 Replace the function writeBeforeRun() in the file TrajectoryFileWriter.cpp with the following function:
 ````
