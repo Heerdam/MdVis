@@ -55,7 +55,7 @@ struct Proxy {
 	GLuint c_ssbo_traj, c_ssbo_sphere, cg_vbo, c_ssbo_weights;
 
 	//geometry pass
-	GLuint g_vao, g_fb, g_pos, g_nrm, g_t, g_bt, g_col, g_depth, g_msaa, g_vbo_aux, g_ebo;
+	GLuint g_vao, g_fb, g_pos, g_nrm, g_t, g_bt, g_col, g_depth, g_vbo_aux, g_ebo;
 
 	//light pass
 	std::vector<float> lights;
@@ -699,8 +699,12 @@ int main(int argc, char* argv[]) {
 	}
 
 	glfwWindowHint(GLFW_REFRESH_RATE, 120);
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+
 	glfwWindowHint(GLFW_DEPTH_BITS, 24);
 	glfwWindowHint(GLFW_STENCIL_BITS, 8);
 
@@ -763,21 +767,20 @@ int main(int argc, char* argv[]) {
 		if (_key == GLFW_KEY_SPACE && _action == GLFW_PRESS)
 			proxy->isPaused = !proxy->isPaused;
 		if (_key == GLFW_KEY_PAGE_UP && _action == GLFW_PRESS)
-			proxy->deltaT = std::clamp(proxy->deltaT += 0.01f, 0.f, 1.f);
+			proxy->deltaT = std::clamp(proxy->deltaT += 0.1f, 0.f, 1.f);
 		if (_key == GLFW_KEY_PAGE_DOWN && _action == GLFW_PRESS)
-			proxy->deltaT = std::clamp(proxy->deltaT -= 0.01f, 0.f, 1.f);
+			proxy->deltaT = std::clamp(proxy->deltaT -= 0.1f, 0.f, 1.f);
 		if (_key == GLFW_KEY_C && _action == GLFW_PRESS)
 			proxy->deltaT *= -1.f;
 		if (proxy->isPaused) {
-			if (_key == GLFW_KEY_X && _action == GLFW_PRESS) {
-				proxy->t += proxy->deltaT * proxy->deltaTime;
-				proxy->t -= std::floor(proxy->t);
-			} else if (_key == GLFW_KEY_Y && _action == GLFW_PRESS) {
-				proxy->t -= proxy->deltaT * proxy->deltaTime;
-				proxy->t += std::floor(proxy->t);
-			}
+			if (_key == GLFW_KEY_X && _action == GLFW_PRESS || _action == GLFW_REPEAT) {
+				proxy->t += proxy->deltaT * proxy->deltaTime*100.f;
+				proxy->t = std::fmod(proxy->t, 1.f);
+			} else if (_key == GLFW_KEY_Z && _action == GLFW_PRESS || _action == GLFW_REPEAT) {
+				proxy->t -= proxy->deltaT * proxy->deltaTime * 100.f;
+				proxy->t = proxy->t <= 0.f ? proxy->t + 1.f : proxy->t;
 
-			std::cout << proxy->t << std::endl;
+			}
 		}
 
 	});
@@ -800,10 +803,10 @@ int main(int argc, char* argv[]) {
 	double time = glfwGetTime();
 	unsigned long long frame = 0;
 
-	GLsync sync[2];
-	uint index = 0;
-	sync[0] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-	sync[1] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+	//GLsync sync[2];
+	//uint index = 0;
+	//sync[0] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+	//sync[1] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 
 	while (!glfwWindowShouldClose(proxy.window) && !proxy.shouldTerminate) {
 
@@ -869,6 +872,7 @@ int main(int argc, char* argv[]) {
 
 				//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 				glMemoryBarrier(GL_ALL_BARRIER_BITS);
+
 			}
 			// -------------------- Geometry Pass --------------------
 			{
@@ -903,6 +907,7 @@ int main(int argc, char* argv[]) {
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				glDisable(GL_DEPTH_TEST);
 				glMemoryBarrier(GL_ALL_BARRIER_BITS);
+	
 			}
 			// -------------------- Copy Depth and Stencil --------------------
 			{
@@ -1048,10 +1053,10 @@ int main(int argc, char* argv[]) {
 #endif
 
 			// -------------------- SYNC --------------------
-			glClientWaitSync(sync[index], GL_SYNC_FLUSH_COMMANDS_BIT, 1000); //TODO
-			glDeleteSync(sync[index]);
-			sync[index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-			index = (index++) % 2;
+			//glClientWaitSync(sync[index], GL_SYNC_FLUSH_COMMANDS_BIT, 1000); //TODO
+			//glDeleteSync(sync[index]);
+			//sync[index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+			//index = (index++) % 2;
 
 			// -------------------- FPS --------------------
 
@@ -1061,7 +1066,7 @@ int main(int argc, char* argv[]) {
 			}
 
 			frame++;
-			proxy.deltaTime = glfwGetTime() - ctime;
+
 			if (ctime - time >= 1.0) {
 #if LOG_FRAMES
 				Logger::LOG(std::to_string(proxy.t) + "\t" + std::to_string(frame) + "\t[" + std::to_string(proxy.deltaTime) + "]", true);
@@ -1072,7 +1077,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		glfwSwapBuffers(proxy.window);
-
+		proxy.deltaTime = glfwGetTime() - ctime;
 	}
 	async.join();
 	glfwTerminate();

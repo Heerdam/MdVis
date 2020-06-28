@@ -48,7 +48,7 @@
 	Valid values:	0, 1
 	Default:		1
 */
-#define USE_BINARY 0
+#define USE_BINARY 1
 
 /*
 	0 - no interpolation
@@ -86,7 +86,7 @@
 	Valid values:	0, 1
 	Default:		1
 */
-#define WIDGET_SHOW 1
+#define WIDGET_SHOW 0
 
 #define WIDGET_WIDTH 400
 #define WIDGET_HEIGHT 400
@@ -96,7 +96,7 @@
 	Valid values:	0, 1
 	Default:		1
 */
-#define LOG_FRAMES 1
+#define LOG_FRAMES 0
 
 /*
 	Enables/ Disables SSAO (Screen Space Ambient Occlusion). Disabling it will increase performance.

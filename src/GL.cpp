@@ -7,7 +7,7 @@ Logger* Logger::instance = new Logger();
 
 void Logger::init() {
 	get()->start = std::chrono::high_resolution_clock::now();
-};
+}
 
 void Logger::LOG(const std::string& _string, bool _ts) {
 	std::lock_guard<std::mutex>(get()->mutex);
@@ -15,11 +15,11 @@ void Logger::LOG(const std::string& _string, bool _ts) {
 	float ms = static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
 	float s = ms / 1000.f;
 	std::cout << (_ts ? " [" + std::to_string(s) + "s]" : "\t") << "\t" << _string << std::endl;
-};
+}
 
 Logger* Logger::get() {
 	return instance;
-};
+}
 
 void ShaderProgram::print(std::string _id, ShaderProgram::Status _compComp, ShaderProgram::Status _compVert,
 	ShaderProgram::Status _compGeom, ShaderProgram::Status _compFrag, ShaderProgram::Status _link, std::string _errorLog) {
@@ -267,7 +267,6 @@ void Camera::normalizeUp() {
 
 std::pair<std::vector<float>, std::vector<uint>> Icosahedron::create(uint _subdivisions) {
 	
-	using IndexedMesh = std::pair<std::vector<float>, std::vector<uint>>;
 	const float X = .525731112119133606f;
 	const float Z = .850650808352039932f;
 	const float N = 0.f;
