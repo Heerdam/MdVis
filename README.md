@@ -19,7 +19,7 @@ mkdir bin
 cd bin
 cmake ..
 make -j4
-./mdatom [path]
+./mdvis [path]
 ````
 path is either a valid path to a .traj file or nothing to show the demo.traj file.
 
