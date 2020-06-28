@@ -66,7 +66,7 @@
 #define ENFORCE_CYCLIC_BOUNDARIES 1
 
 /*
-	Allows ultra fast concurrent calculating of the cubic splines. Set this to 0 if your
+	Allows ultra fast concurrent computing of the cubic splines. Set this to 0 if your
 	computer doesnt manage it to link it. (-> if MdVis gets stuck for no reason)
 	Valid values:	0, 1
 	Default:		1
