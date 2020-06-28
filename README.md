@@ -31,19 +31,36 @@ All flags to configurating MdVis are located in the Defines.h header file.
 
 ### General configuration
 #### Window size 
+Change the size of the window to something fitting. Default: 1920x1080
 #### Widget size 
+Change the size of the camera widget. Default: 400x400
 #### Interpolation type 
+MdVis comes with 3 interpolations: no interpolation, linear interpoltation, cubic spline interpolation.
+Default: cubic spline interpolation.
 #### Cyclic boundary conditions
+Toggle this if the cyclic boundary conditions should be enforced.
 #### Logging 
+If enabled it will print out an overview every frame.
 
 ### Performance
 #### Icosahedron
+Defines how many times the icosahedron gets subdivided. More subdivison means smoother surface but more vertices to draw. High impact on performance.
 #### SSAO
+Enables/ Disables SSAO (Screen Space Ambient Occlusion). Disabling it will increase performance.
 #### Computing spline 
+Allows ultra fast concurrent calculating of the cubic splines on the gpu. Set this to 0 if your computer doesnt manage to link the shader. (-> if MdVis gets stuck for no reason)
+  
+### Key bindings
+Rotate the camera with left mouse button pressed.
+Move the camera with the arrow keys.
+Pause/ Unpause the animation with 'space'.
+Reset the animation with 'r'.
+While pause step through the animation with 'x' and 'y'.
+Increase and decrease the speed of the stepping speed with 'page up' and 'page down'.
 
 ## Trajectory Specifications
 MdVis can parse binary or ascii file format. The flags can be set in the Define.h file to switch between the modes.
-### Binary file format ###
+### Binary file format (recommended!)
 The binary file is similar to the ascii file format that it takes the exact same layout. The easiest way to achieve it is to push it into a vector and write the vector to a file (e.g. std::ofstream).
 ```
 { number_of_atoms, box_size_x box_size_y box_size_z, atom_1_step_0_x, atom_1_step_0_y .... }
@@ -87,3 +104,8 @@ void TrajectoryFileWriter::writeBeforeRun() {
 
 #### Ascii
 Implement a writer that outputs the trajectories in the proper format. Don't print the initial positions. 
+
+## FAQ and know bugs
+### Very low frame rate or strange drawing issues (deformed spheres)
+This is a known issue that can happen every so often. I'm not sure why this happens but it is most likely a problem with the libraries or the opengl driver.
+Solution: clean and recompile until it works.
