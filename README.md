@@ -81,6 +81,7 @@ atom_n_step_n_x atom_n_step_n_y atom_n_step_n_z
 ```
 
 ### Setting up MdAtom
+Important: Output must be set up in the input file of mdatom. Set TrajectoryOutputFormat to 0 for binary and 1 für ascii.
 #### Binary
 Replace the function writeBeforeRun() in the file TrajectoryFileWriter.cpp with the following function:
 ````
