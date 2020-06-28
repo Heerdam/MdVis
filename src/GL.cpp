@@ -436,7 +436,7 @@ void FileParser::loadFile(std::string _path, std::vector<float>& _coords, uint& 
 CameraController::CameraController(Camera* _cam) : camera(_cam){}
 
 void CameraController::mbCB(int _button, int _action, int /*_mods*/) {
-	mbDown = _button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS;
+	mbDown = _button == GLFW_MOUSE_BUTTON_LEFT && _action == GLFW_PRESS;
 }
 
 void CameraController::cursorCB(double _xpos, double _ypos) {
