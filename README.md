@@ -9,6 +9,8 @@ Clone the repository with
 ````
 git clone git@github.com:Heerdam/MdVis.git.
 ````
+Configurate MdVis in Defines.h as needed.
+
 Important:
 MdVis needs c++17. Make sure that at least gcc 9 is installed. Furthermore, **your gpu must support opengl 4.3 or it will not run!**
 
@@ -31,9 +33,9 @@ All flags to configurating MdVis are located in the Defines.h header file.
 
 ### General configuration
 #### Window size 
-Change the size of the window to something fitting. Default: 1920x1080
+Change the size of the window to something fitting. Default: 800x600
 #### Widget size 
-Change the size of the camera widget. Default: 400x400
+Change the size of the camera widget. Default: 200x200
 #### Interpolation type 
 MdVis comes with 3 interpolations: no interpolation, linear interpoltation, cubic spline interpolation.
 Default: cubic spline interpolation.
@@ -51,11 +53,11 @@ Enables/ Disables SSAO (Screen Space Ambient Occlusion). Disabling it will incre
 Allows ultra fast concurrent computing of the cubic splines on the gpu. Set this to 0 if your computer doesnt manage to link the shader. (-> if MdVis gets stuck for no reason)
   
 ### Key bindings
-Rotate the camera with left mouse button pressed.
-Move the camera with the arrow keys.
-Pause/ Unpause the animation with 'space'.
-Reset the animation with 'r'.
-While pause step through the animation with 'x' and 'y'.
+Rotate the camera with left mouse button pressed.<br>
+Move the camera with the arrow keys.<br>
+Pause/ Unpause the animation with 'space'.<br>
+Reset the animation with 'r'.<br>
+While pause step through the animation with 'x' and 'y'.<br>
 Increase and decrease the speed of the stepping speed with 'page up' and 'page down'.
 
 ## Trajectory Specifications
@@ -107,6 +109,8 @@ void TrajectoryFileWriter::writeBeforeRun() {
 Implement a writer that outputs the trajectories in the proper format. Don't print the initial positions. 
 
 ## FAQ and know bugs
-### Very low frame rate or strange drawing issues (deformed spheres)
+### Very low frame rate, access violation or strange drawing issues (deformed spheres)
 This is a known issue that can happen every so often. I'm not sure why this happens but it is most likely a problem with the libraries or the opengl driver.
-Solution: clean and recompile until it works.
+Solution: clean and recompile until it works. Reducing sphere divisons might help too. Too big buffers may lead to strange issues with the driver.
+#### It doesnt render any sphere
+Reduce sphere division. Your gpu cant manage that many vertices. 
