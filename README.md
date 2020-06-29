@@ -53,11 +53,11 @@ Enables/ Disables SSAO (Screen Space Ambient Occlusion). Disabling it will incre
 Allows ultra fast concurrent computing of the cubic splines on the gpu. Set this to 0 if your computer doesnt manage to link the shader. (-> if MdVis gets stuck for no reason)
   
 ### Key bindings
-Rotate the camera with left mouse button pressed.
-Move the camera with the arrow keys.
-Pause/ Unpause the animation with 'space'.
-Reset the animation with 'r'.
-While pause step through the animation with 'x' and 'y'.
+Rotate the camera with left mouse button pressed.<br>
+Move the camera with the arrow keys.<br>
+Pause/ Unpause the animation with 'space'.<br>
+Reset the animation with 'r'.<br>
+While pause step through the animation with 'x' and 'y'.<br>
 Increase and decrease the speed of the stepping speed with 'page up' and 'page down'.
 
 ## Trajectory Specifications
