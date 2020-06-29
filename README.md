@@ -9,6 +9,8 @@ Clone the repository with
 ````
 git clone git@github.com:Heerdam/MdVis.git.
 ````
+Configurate MdVis in Defines.h as needed.
+
 Important:
 MdVis needs c++17. Make sure that at least gcc 9 is installed. Furthermore, **your gpu must support opengl 4.3 or it will not run!**
 
@@ -107,6 +109,8 @@ void TrajectoryFileWriter::writeBeforeRun() {
 Implement a writer that outputs the trajectories in the proper format. Don't print the initial positions. 
 
 ## FAQ and know bugs
-### Very low frame rate or strange drawing issues (deformed spheres)
+### Very low frame rate, access violation or strange drawing issues (deformed spheres)
 This is a known issue that can happen every so often. I'm not sure why this happens but it is most likely a problem with the libraries or the opengl driver.
-Solution: clean and recompile until it works.
+Solution: clean and recompile until it works. Reducing sphere divisons might help too. Too big buffers may lead to strange issues with the driver.
+#### It doesnt render any sphere
+Reduce sphere division. Your gpu cant manage that many vertices. 
