@@ -33,9 +33,9 @@ All flags to configurating MdVis are located in the Defines.h header file.
 
 ### General configuration
 #### Window size 
-Change the size of the window to something fitting. Default: 1920x1080
+Change the size of the window to something fitting. Default: 800x600
 #### Widget size 
-Change the size of the camera widget. Default: 400x400
+Change the size of the camera widget. Default: 200x200
 #### Interpolation type 
 MdVis comes with 3 interpolations: no interpolation, linear interpoltation, cubic spline interpolation.
 Default: cubic spline interpolation.
