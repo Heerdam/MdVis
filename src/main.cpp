@@ -41,6 +41,7 @@ struct Proxy {
 	const uint VERTEXSIZE = 3u; //pos
 	const uint SPHEREVERTEXSIZE = 3u; //pos
 	const uint AUXVERTEXSIZE = 3u + 3u + 3u; //nrm + t + bt
+	GLint maxIndices;
 
 	// -------------------- GL --------------------
 	//expects normalized rgb color. use this tool https://www.tydac.ch/color/
@@ -689,7 +690,7 @@ int main(int argc, char* argv[]) {
 		proxy.pathToFile = std::string(argv[1]);
 
 	Logger::init();
-	Logger::LOG("\n\n\t\t __  __      _ __      __ _\n\t\t|  \\/  |    | |\\ \\    / /(_)\n\t\t| \\  / |  __| | \\ \\  / /  _  ___\n\t\t| |\\/| | / _` |  \\ \\/ /  | |/ __|\n\t\t| |  | || (_| |   \\  /   | |\\__ \\\n\t\t|_|  |_| \\__,_|    \\/    |_||___ /", false);
+	Logger::LOG("\n\n\t\t __  __      _ __      __ _\n\t\t|  \\/  |    | |\\ \\    / /(_)\n\t\t| \\  / |  __| | \\ \\  / /  _  ___\n\t\t| |\\/| | / _` |  \\ \\/ /  | |/ __|\n\t\t| |  | || (_| |   \\  /   | |\\__ \\\n\t\t|_|  |_| \\__,_|    \\/    |_||___/", false);
 	Logger::LOG("heerdam@student.ethz.ch, 2020\n\n------------------------------------------------------------------------------------\n", false);
 
 	// --------------------INITIALISE THE WINDOW, proxy, CAMERAS AND CONTEXT --------------------
@@ -749,6 +750,10 @@ int main(int argc, char* argv[]) {
 	glDebugMessageCallback(MessageCallback, 0);
 #endif
 
+	GLint a, b;
+	glGetIntegerv(GL_MAX_ELEMENTS_VERTICES, &a);
+	glGetIntegerv(GL_MAX_ELEMENTS_INDICES, &proxy.maxIndices);
+
 	Logger::LOG("LOG:\tOpengl context set up and ready.\n", true);
 
 	// -------------------- SET UP CALLBACKS --------------------
@@ -773,13 +778,12 @@ int main(int argc, char* argv[]) {
 		if (_key == GLFW_KEY_C && _action == GLFW_PRESS)
 			proxy->deltaT *= -1.f;
 		if (proxy->isPaused) {
-			if (_key == GLFW_KEY_X && _action == GLFW_PRESS || _action == GLFW_REPEAT) {
+			if (_key == GLFW_KEY_X && (_action == GLFW_PRESS || _action == GLFW_REPEAT)) {
 				proxy->t += proxy->deltaT * proxy->deltaTime*100.f;
 				proxy->t = std::fmod(proxy->t, 1.f);
-			} else if (_key == GLFW_KEY_Z && _action == GLFW_PRESS || _action == GLFW_REPEAT) {
+			} else if (_key == GLFW_KEY_Z && (_action == GLFW_PRESS || _action == GLFW_REPEAT)) {
 				proxy->t -= proxy->deltaT * proxy->deltaTime * 100.f;
 				proxy->t = proxy->t <= 0.f ? proxy->t + 1.f : proxy->t;
-
 			}
 		}
 
@@ -895,7 +899,15 @@ int main(int argc, char* argv[]) {
 				glStencilFunc(GL_ALWAYS, 1, 0xFF);
 				glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 
-				glDrawElements(GL_TRIANGLES, proxy.INDEXCOUNT, GL_UNSIGNED_INT, (void*)0);
+				const uint tr = proxy.INDEXCOUNT / 3;
+				const uint mtr = proxy.maxIndices / 3;
+
+				const uint dc = tr / mtr;
+				const uint rest = tr % mtr;
+
+				for(uint i = 0; i < dc; ++i)
+					glDrawElements(GL_TRIANGLES, mtr*3, GL_UNSIGNED_INT, (void*)(sizeof(uint) * mtr * 3 * i));
+				glDrawElements(GL_TRIANGLES, rest*3, GL_UNSIGNED_INT, (void*)(sizeof(uint) * (proxy.INDEXCOUNT - rest*3)));
 
 				glStencilMask(0x00);
 				glStencilFunc(GL_EQUAL, 1, 0xFF);
