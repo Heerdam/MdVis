@@ -40,8 +40,8 @@
 /*
 	Change window resolution here.
 */
-#define WINDOW_WIDTH 1920
-#define WINDOW_HEIGHT 1080
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
 
 /*
 	Whether binary or ascii files are being loaded.
@@ -79,24 +79,24 @@
 	Valid range: [0,n)
 	Default and recommended: 2
 */
-#define SPHERE_SUBDIVISIONS 3
+#define SPHERE_SUBDIVISIONS 2
 
 /*
 	Toggles the axis widget.
 	Valid values:	0, 1
 	Default:		1
 */
-#define WIDGET_SHOW 0
+#define WIDGET_SHOW 1
 
-#define WIDGET_WIDTH 400
-#define WIDGET_HEIGHT 400
+#define WIDGET_WIDTH 200
+#define WIDGET_HEIGHT 200
 
 /*
 	If enabled it will print out an overview every frame.
 	Valid values:	0, 1
 	Default:		1
 */
-#define LOG_FRAMES 0
+#define LOG_FRAMES 1
 
 /*
 	Enables/ Disables SSAO (Screen Space Ambient Occlusion). Disabling it will increase performance.
@@ -112,12 +112,12 @@
 #define SSAO_RADIUS 1.f
 #define SSAO_BIAS 0.025f
 
-#define GL_DEBUG 1
+#define GL_DEBUG 0
 
 /*
 Set this to "" if needed when debugging in VsCode (ugly hack)
 */
-const std::string VSC_WORKDIR_OFFSET = "../";
+const std::string VSC_WORKDIR_OFFSET = "../"; //TODO neeeeeei
 
 typedef unsigned int uint;
 typedef unsigned short ushort;

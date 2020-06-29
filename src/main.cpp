@@ -8,9 +8,8 @@
 #if GL_DEBUG
 void GLAPIENTRY MessageCallback(GLenum /*source*/, GLenum type, GLuint /*id*/, GLenum severity, GLsizei /*length*/, const GLchar* message, const void* /*userParam*/) {
 	if (type != GL_DEBUG_TYPE_ERROR) return;
-	fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-		(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-		type, severity, message);
+	//fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n", (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""), type, severity, message);
+	Logger::LOG("GL CALLBACK: " + std::string(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "") + " type = " + std::to_string(type) + ", severity = " + std::to_string(severity) + ", message = " + std::string(message), true);
 }
 #endif
 
@@ -750,9 +749,15 @@ int main(int argc, char* argv[]) {
 	glDebugMessageCallback(MessageCallback, 0);
 #endif
 
-	GLint a, b;
-	glGetIntegerv(GL_MAX_ELEMENTS_VERTICES, &a);
+	//GLint a, b;
+	//glGetIntegerv(GL_MAX_ELEMENTS_VERTICES, &a);
 	glGetIntegerv(GL_MAX_ELEMENTS_INDICES, &proxy.maxIndices);
+
+	//std::cout << a << std::endl;
+
+	//GLint size;
+	//glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &size);
+	//std::cout << "GL_MAX_SHADER_STORAGE_BLOCK_SIZE is " << size << " bytes." << std::endl;
 
 	Logger::LOG("LOG:\tOpengl context set up and ready.\n", true);
 
@@ -877,6 +882,7 @@ int main(int argc, char* argv[]) {
 				//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 				glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
+				
 			}
 			// -------------------- Geometry Pass --------------------
 			{
@@ -904,11 +910,12 @@ int main(int argc, char* argv[]) {
 
 				const uint dc = tr / mtr;
 				const uint rest = tr % mtr;
-
+				
 				for(uint i = 0; i < dc; ++i)
 					glDrawElements(GL_TRIANGLES, mtr*3, GL_UNSIGNED_INT, (void*)(sizeof(uint) * mtr * 3 * i));
+				
 				glDrawElements(GL_TRIANGLES, rest*3, GL_UNSIGNED_INT, (void*)(sizeof(uint) * (proxy.INDEXCOUNT - rest*3)));
-
+				
 				glStencilMask(0x00);
 				glStencilFunc(GL_EQUAL, 1, 0xFF);
 				glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);

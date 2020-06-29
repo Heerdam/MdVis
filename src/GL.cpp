@@ -14,7 +14,7 @@ void Logger::LOG(const std::string& _string, bool _ts) {
 	std::chrono::duration<float> elapsed = std::chrono::high_resolution_clock::now() - get()->start;
 	float ms = static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
 	float s = ms / 1000.f;
-	std::cout << (_ts ? " [" + std::to_string(s) + "s]" : "\t") << "\t" << _string << std::endl;
+	std::cout << (_ts ? " [" + std::to_string(s) + "s]" : "\t") << "\t" << _string << std::endl << std::flush;
 }
 
 Logger* Logger::get() {
