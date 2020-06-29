@@ -115,7 +115,7 @@
 #define GL_DEBUG 1
 
 /*
-Set this to "" if needed when debugging in VsCode
+Set this to "" if needed when debugging in VsCode (ugly hack)
 */
 const std::string VSC_WORKDIR_OFFSET = "../";
 
