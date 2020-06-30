@@ -246,9 +246,9 @@ void Camera::update() {
 	normalizeUp();
 
 	float aspect = viewportWidth / viewportHeight;
-	if(isOrtho)
-		projection = glm::ortho(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, abs(nearPlane), abs(farPlane));
-	else
+	//if(isOrtho)
+	//	projection = glm::ortho(-viewportWidth/2.f, viewportWidth/2.f, -viewportHeight/2.f, viewportHeight/2.f, std::abs(nearPlane), std::abs(farPlane));
+	//else
 	projection = glm::perspective(glm::radians(fieldOfView), aspect, std::abs(nearPlane), std::abs(farPlane));
 	view = glm::lookAt(position, position + direction, up);
 	combined = projection * view;

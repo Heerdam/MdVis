@@ -6,9 +6,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 if (MSVC)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2 /DNDEBUG")
 else()
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -ggdb" )
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native -DNDEBUG -flto")
 endif()
 
 include(FetchContent)
@@ -26,7 +28,7 @@ add_executable(mdvis
 )
 
 # ------------------ GLM ------------------
-find_package (glm QUIET)
+find_package (glm 0.9.9.9 QUIET)
 if(glm_FOUND)
 	message(STATUS "GLM found!")
 else()
@@ -48,7 +50,7 @@ else()
 endif ()
 
 # ------------------ GLFW ------------------
-find_package (glfw3 QUIET)
+find_package (glfw3 3.3.2 QUIET)
 if(glfw3_FOUND)
 	message(STATUS "GLFW found!")
 else()
@@ -94,8 +96,9 @@ target_link_libraries(mdvis
 		glfw
 		glad
 		glm
+		
 )
 
-if (NOT MSVC)
-	set_property(TARGET mdvis PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR})
-endif()
+#if (NOT MSVC)
+	#set_property(TARGET mdvis PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR})
+#endif()
