@@ -1,3 +1,6 @@
+#Disclaimer (read first)
+This is a prototype with some very fishy design choices. Yes it works but use with care. It might (must) get completly rewritten in the future. 
+
 ![pic](https://github.com/Heerdam/MdVis/blob/master/preview.jpg)
 
 # MdVis
